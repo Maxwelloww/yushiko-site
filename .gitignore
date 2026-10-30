@@ -1,0 +1,8 @@
+.env
+node_modules/
+data/*.sqlite
+data/*.sqlite-*
+backups/*
+!backups/.gitkeep
+.DS_Store
+.neon
