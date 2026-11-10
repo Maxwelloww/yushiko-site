@@ -107,7 +107,7 @@ CREATE TABLE IF NOT EXISTS system_logs (
 `);
 const seedNews = db.prepare('SELECT COUNT(*) AS n FROM news').get().n;
 if (!seedNews) {
-  db.prepare('INSERT INTO news (title, body) VALUES (?, ?)').run('Добро пожаловать в Yushiko!', 'Мы рады видеть тебя в нашем сообществе. Знакомься, общайся и участвуй в событиях.');
+  db.prepare('INSERT INTO news (title, body) VALUES (?, ?)').run('Добро пожаловать в Miteria!', 'Мы рады видеть тебя в нашем сообществе. Знакомься, общайся и участвуй в событиях.');
   db.prepare('INSERT INTO news (title, body) VALUES (?, ?)').run('Сайт обновлён', 'Теперь новости, мероприятия и заявки можно управлять через панель администратора.');
 }
 const seedEvents = db.prepare('SELECT COUNT(*) AS n FROM events').get().n;
@@ -116,7 +116,7 @@ if (!seedEvents) {
 }
 
 const seedAchievements = [
-  ['first_step','Первый шаг','Присоединился к пространству Yushiko','✿'],
+  ['first_step','Первый шаг','Присоединился к пространству Miteria','✿'],
   ['community_voice','Голос сообщества','Заполнил профиль участника','☾'],
   ['gallery_artist','Творец','Работа опубликована в галерее','✦'],
   ['event_guest','Гость события','Записался на мероприятие','❋']
@@ -453,7 +453,7 @@ app.post('/api/admin/events', requireAdmin, ensureCsrf, (req, res) => {
   const r = db.prepare('INSERT INTO events (title, description, event_date, location) VALUES (?, ?, ?, ?)')
     .run(safeText(b.title, 120), safeText(b.description, 2000), date.toISOString(), safeText(b.location || 'Discord', 120));
   logAction(req, 'event.create', `id=${r.lastInsertRowid}; title=${safeText(b.title, 120)}`);
-  notifyDiscord(`Новое событие Yushiko: ${safeText(b.title,120)} — ${date.toISOString()}`).catch(()=>{});
+  notifyDiscord(`Новое событие Miteria: ${safeText(b.title,120)} — ${date.toISOString()}`).catch(()=>{});
   res.status(201).json({ ok: true });
 });
 app.delete('/api/admin/events/:id', requireAdmin, ensureCsrf, (req, res) => {
@@ -503,7 +503,7 @@ app.get('/api/admin/logs', requireAdmin, (req, res) => res.json(db.prepare('SELE
 app.get('/api/admin/backup', requireAdmin, ensureCsrf, (req, res) => {
   const dir = path.join(__dirname, 'backups');
   fs.mkdirSync(dir, { recursive: true });
-  const filename = `yushiko-${new Date().toISOString().replace(/[:.]/g, '-')}.sqlite`;
+  const filename = `miteria-${new Date().toISOString().replace(/[:.]/g, '-')}.sqlite`;
   const target = path.join(dir, filename);
   db.backup(target).then(() => {
     logAction(req, 'backup.create', filename);
@@ -515,4 +515,4 @@ app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'], m
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('*', (req, res) => res.status(404).sendFile(path.join(__dirname, 'public', '404.html')));
 
-app.listen(PORT, () => console.log(`Yushiko is running at ${SITE_URL} (port ${PORT})`));
+app.listen(PORT, () => console.log(`Miteria is running at ${SITE_URL} (port ${PORT})`));
