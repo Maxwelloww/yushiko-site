@@ -15,7 +15,8 @@ const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const isProduction = process.env.NODE_ENV === 'production';
 const SITE_URL = (process.env.SITE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
-const DB_DIR = path.join(__dirname, 'data');
+// Railway volume can be mounted at /app/data and selected with DATA_DIR.
+const DB_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(__dirname, 'data');
 fs.mkdirSync(DB_DIR, { recursive: true });
 
 if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32) {
