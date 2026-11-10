@@ -173,6 +173,8 @@ app.use((req, res, next) => {
 });
 
 const adminIds = new Set((process.env.DISCORD_ADMIN_IDS || '').split(',').map(x => x.trim()).filter(Boolean));
+const adminRoleIds = new Set((process.env.DISCORD_ADMIN_ROLE_IDS || '').split(',').map(x => x.trim()).filter(Boolean));
+const adminRoleCache = new Map();
 const inviteUrl = process.env.DISCORD_INVITE_URL || 'https://discord.gg/xJfXk8kX5';
 
 function safeText(value, max = 2000) {
@@ -187,9 +189,30 @@ function requireLogin(req, res, next) {
   if (!req.session.user) return res.status(401).json({ error: 'Сначала войдите через Discord.' });
   next();
 }
-function requireAdmin(req, res, next) {
+async function hasAdminRole(userId) {
+  if (!adminRoleIds.size || !process.env.DISCORD_BOT_TOKEN || !process.env.DISCORD_GUILD_ID) return false;
+  const cached = adminRoleCache.get(userId);
+  if (cached && cached.expiresAt > Date.now()) return cached.allowed;
+  try {
+    const response = await fetch(`https://discord.com/api/v10/guilds/${encodeURIComponent(process.env.DISCORD_GUILD_ID)}/members/${encodeURIComponent(userId)}`, {
+      headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` }, signal: AbortSignal.timeout(5000)
+    });
+    if (!response.ok) return false;
+    const member = await response.json();
+    const allowed = Array.isArray(member.roles) && member.roles.some(roleId => adminRoleIds.has(roleId));
+    adminRoleCache.set(userId, { allowed, expiresAt: Date.now() + 30000 });
+    return allowed;
+  } catch {
+    return false;
+  }
+}
+async function isAdminUser(userId) {
+  const id = String(userId);
+  return adminIds.has(id) || hasAdminRole(id);
+}
+async function requireAdmin(req, res, next) {
   if (!req.session.user) return res.status(401).json({ error: 'Требуется вход через Discord.' });
-  if (!adminIds.has(req.session.user.id)) return res.status(403).json({ error: 'Нет доступа к панели администратора.' });
+  if (!(await isAdminUser(req.session.user.id))) return res.status(403).json({ error: 'Для доступа нужна разрешённая роль администратора на сервере Miteria.' });
   next();
 }
 function ensureCsrf(req, res, next) {
@@ -215,9 +238,11 @@ async function notifyDiscord(content) {
   await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({content:String(content).slice(0,1800)}), signal:AbortSignal.timeout(3500) });
 }
 
-app.get('/api/me', (req, res) => {
+app.get('/api/me', async (req, res) => {
   if (!req.session.csrf) req.session.csrf = crypto.randomBytes(32).toString('hex');
-  res.json({ user: userView(req), csrfToken: req.session.csrf });
+  const user = userView(req);
+  if (user && !user.isAdmin) user.isAdmin = await hasAdminRole(user.id);
+  res.json({ user, csrfToken: req.session.csrf });
 });
 app.get('/api/public', async (req, res) => {
   let discord = { members: null, online: null, source: 'unavailable' };

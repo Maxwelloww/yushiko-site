@@ -107,7 +107,7 @@ async function init(){
  try {
   const me=await fetch('/api/me').then(r=>r.json());csrfToken=me.csrfToken||'';
   if(!me.user){$('#loginPanel').hidden=false;$('#dashboard').hidden=true;$('#adminIdentity').textContent='Гость';return}
-  if(!me.user.isAdmin){$('#loginPanel').hidden=false;$('#dashboard').hidden=true;$('#adminIdentity').textContent=me.user.username;$('#loginPanel h1').textContent='Нет доступа';$('#loginPanel p:not(.eyebrow)').textContent='Ты вошёл через Discord, но твой ID не добавлен в список администраторов.';return}
+  if(!me.user.isAdmin){$('#loginPanel').hidden=false;$('#dashboard').hidden=true;$('#adminIdentity').textContent=me.user.username;$('#loginPanel h1').textContent='Нет доступа';$('#loginPanel p:not(.eyebrow)').textContent='У тебя нет ни одной разрешённой роли администратора на сервере Miteria.';return}
   $('#loginPanel').hidden=true;$('#dashboard').hidden=false;$('#logoutButton').hidden=false;$('#adminIdentity').textContent=`Администратор: ${me.user.username}`;await showTab('overview');
  } catch(e){$('#loginPanel').hidden=false;$('#dashboard').hidden=true;say('Не удалось проверить вход. Запусти сервер и обнови страницу.','error')}
 }
