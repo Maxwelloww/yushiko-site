@@ -289,7 +289,27 @@ app.post('/api/tickets/:id/messages', requireLogin, ensureCsrf, (req, res) => {
 });
 
 // Community profiles, achievements, event RSVPs, and moderated gallery.
-app.get('/api/profile', requireLogin, (req, res) => {
+async function getDiscordGuildMembership(userId) {
+  const botToken = process.env.DISCORD_BOT_TOKEN;
+  const guildId = process.env.DISCORD_GUILD_ID;
+  if (!botToken || !guildId) return { status: 'not_configured', roles: [] };
+  const headers = { Authorization: `Bot ${botToken}` };
+  try {
+    const [memberResponse, rolesResponse] = await Promise.all([
+      fetch(`https://discord.com/api/v10/guilds/${encodeURIComponent(guildId)}/members/${encodeURIComponent(userId)}`, { headers, signal: AbortSignal.timeout(5000) }),
+      fetch(`https://discord.com/api/v10/guilds/${encodeURIComponent(guildId)}/roles`, { headers, signal: AbortSignal.timeout(5000) })
+    ]);
+    if (memberResponse.status === 404) return { status: 'not_member', roles: [] };
+    if (!memberResponse.ok || !rolesResponse.ok) return { status: 'error', roles: [] };
+    const [member, serverRoles] = await Promise.all([memberResponse.json(), rolesResponse.json()]);
+    const roleNames = new Map(serverRoles.map(role => [role.id, role.name]));
+    const roles = (member.roles || []).filter(id => id !== guildId).map(id => ({ id, name: roleNames.get(id) || 'Роль сервера' }));
+    return { status: 'ok', roles };
+  } catch {
+    return { status: 'error', roles: [] };
+  }
+}
+app.get('/api/profile', requireLogin, async (req, res) => {
   const u = req.session.user;
   let profile = db.prepare('SELECT * FROM profiles WHERE user_id=?').get(String(u.id));
   if (!profile) {
@@ -297,13 +317,14 @@ app.get('/api/profile', requireLogin, (req, res) => {
     profile = db.prepare('SELECT * FROM profiles WHERE user_id=?').get(String(u.id));
   }
   db.prepare("INSERT OR IGNORE INTO user_achievements (user_id,achievement_id) SELECT ?,id FROM achievements WHERE code='first_step'").run(String(u.id));
-  res.json({ profile, achievements: db.prepare('SELECT a.code,a.title,a.description,a.icon,ua.earned_at FROM user_achievements ua JOIN achievements a ON a.id=ua.achievement_id WHERE ua.user_id=? ORDER BY ua.earned_at').all(String(u.id)) });
+  const guildMembership = await getDiscordGuildMembership(String(u.id));
+  res.json({ profile, guildMembership, achievements: db.prepare('SELECT a.code,a.title,a.description,a.icon,ua.earned_at FROM user_achievements ua JOIN achievements a ON a.id=ua.achievement_id WHERE ua.user_id=? ORDER BY ua.earned_at').all(String(u.id)) });
 });
 app.put('/api/profile', requireLogin, ensureCsrf, (req,res) => {
   const b=req.body||{};
-  if (typeof b.bio!=='string' || b.bio.length>240 || typeof b.title!=='string' || b.title.length>40) return res.status(400).json({error:'Описание — до 240 символов, титул — до 40.'});
+  if (typeof b.bio!=='string' || b.bio.length>240) return res.status(400).json({error:'Описание должно быть текстом не длиннее 240 символов.'});
   const u=req.session.user;
-  db.prepare("INSERT INTO profiles(user_id,username,bio,title,updated_at) VALUES(?,?,?,?,datetime('now')) ON CONFLICT(user_id) DO UPDATE SET username=excluded.username,bio=excluded.bio,title=excluded.title,updated_at=datetime('now')").run(String(u.id),safeText(u.username,100),safeText(b.bio,240),safeText(b.title,40));
+  db.prepare("INSERT INTO profiles(user_id,username,bio,title,updated_at) VALUES(?,?,?,'Участник Miteria',datetime('now')) ON CONFLICT(user_id) DO UPDATE SET username=excluded.username,bio=excluded.bio,updated_at=datetime('now')").run(String(u.id),safeText(u.username,100),safeText(b.bio,240));
   db.prepare("INSERT OR IGNORE INTO user_achievements(user_id,achievement_id) SELECT ?,id FROM achievements WHERE code='community_voice'").run(String(u.id));
   logAction(req,'profile.update','profile updated'); res.json({ok:true});
 });

@@ -152,3 +152,26 @@ html{scroll-padding-top:76px}body{background:#050505;color:#f4f4f1;font-family:'
 .role-shop-action .button:hover{border-color:#fff;background:transparent;color:#fff}
 .role-shop-note{max-width:520px;color:#c2c2c2;font-size:.68rem;line-height:1.7}
 @media(max-width:700px){.role-shop-section{padding:20px 15px}.role-shop-section .section-heading{align-items:flex-start}.role-shop-section .section-heading h2{font-size:2.35rem}.role-shop-grid{gap:11px;margin-top:18px}.role-shop-card{min-height:0;padding:18px}.role-shop-card:before{right:12px;top:12px;font-size:2.2rem}.role-shop-action{padding:16px}.role-shop-action .button{width:100%}}
+
+/* Account: Discord roles and an achievements popup. */
+.discord-roles{margin-top:20px;padding:15px 16px;border:1px solid #444;background:linear-gradient(125deg,#1d1d1d,#101010)}
+.discord-roles-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.discord-roles-heading strong{font-size:.7rem}
+.discord-role-status{color:#aaa;font-size:.5rem;letter-spacing:.12em}
+.discord-role-status.is-checked{color:#d7ead9}
+.discord-role-list{display:flex;flex-wrap:wrap;gap:8px}
+.discord-role-chip{display:inline-flex;align-items:center;min-height:30px;padding:5px 10px;border:1px solid #656565;background:#292929;color:#f3f3ef;font-size:.62rem}
+.discord-role-message{margin:0;color:#aaa;font-size:.64rem;line-height:1.6}
+.achievement-launch{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:20px;padding-top:16px;border-top:1px solid #ffffff24}
+.achievement-launch>span{color:#aaa;font-size:.65rem}
+.achievement-launch .button{padding:10px 14px;font-size:.62rem}
+.achievements-dialog{width:min(680px,calc(100% - 28px));max-height:min(78vh,700px);padding:clamp(18px,4vw,30px);border:1px solid #666;background:radial-gradient(ellipse at top left,#262626,#0d0d0d 70%);color:#f5f5f1;box-shadow:0 25px 90px #000b}
+.achievements-dialog::backdrop{background:#000b;backdrop-filter:blur(5px)}
+.achievements-dialog[open]{animation:achievement-pop .2s ease-out}
+@keyframes achievement-pop{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+.achievements-dialog-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding-bottom:15px;border-bottom:1px solid #ffffff25}
+.achievements-dialog-head h3{margin:0;font-family:var(--serif);font-size:clamp(1.8rem,4vw,2.5rem);font-weight:500}
+.achievements-close{width:36px;height:36px;border:1px solid #555;background:#151515;color:#fff;font-size:1.5rem;line-height:1;cursor:pointer}
+.achievement-modal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;max-height:55vh;overflow:auto;padding-top:18px}
+.achievement-modal-grid .achievement{min-height:90px}
+@media(max-width:600px){.discord-roles-heading{align-items:flex-start;flex-direction:column}.achievement-launch{align-items:flex-start;flex-direction:column}.achievement-launch .button{width:100%}.achievement-modal-grid{grid-template-columns:1fr}}
