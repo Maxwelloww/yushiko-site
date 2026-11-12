@@ -108,6 +108,22 @@ CREATE TABLE IF NOT EXISTS system_logs (
   duration_ms INTEGER NOT NULL, ip TEXT NOT NULL, user_id TEXT NOT NULL DEFAULT '',
   message TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, username TEXT NOT NULL,
+  body TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS raffles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+  prize TEXT NOT NULL, end_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open',
+  winner_user_id TEXT, winner_name TEXT, created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS raffle_entries (
+  raffle_id INTEGER NOT NULL REFERENCES raffles(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL, username TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(raffle_id,user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_created ON chat_messages(id DESC);
 `);
 for (const [table, column, definition] of [
   ['gallery_items', 'category', "TEXT NOT NULL DEFAULT 'Другое'"],
@@ -132,8 +148,41 @@ const seedAchievements = [
   ['gallery_artist','Творец','Работа опубликована в галерее','✦'],
   ['event_guest','Гость события','Записался на мероприятие','❋']
 ];
+const achievementMilestones = {
+  chat: { title: 'Сообщений в чате', icon: '☾', thresholds: [1,5,10,25,50,100,200,350,500,750,1000,1500,2000,3000,4000,5000,7500,10000,15000,20000,30000,50000,75000,100000] },
+  events: { title: 'Записей на события', icon: '✧', thresholds: [1,2,3,5,7,10,15,20,30,40,50,75,100,150,200,300,400,500,700,1000,1500,2000,3000,5000] },
+  gallery: { title: 'Опубликованных работ', icon: '✿', thresholds: [1,2,3,5,7,10,15,20,30,40,50,75,100,150,200,300,400,500,700,1000,1500,2000,3000,5000] },
+  company: { title: 'Запросов на поиск компании', icon: '♧', thresholds: [1,2,3,5,7,10,15,20,30,40,50,75,100,150,200,300,400,500,700,1000,1500,2000,3000,5000] }
+};
+for (const [group, milestone] of Object.entries(achievementMilestones)) {
+  for (const threshold of milestone.thresholds) {
+    seedAchievements.push([
+      `${group}_${threshold}`,
+      `${milestone.title} · ${threshold}`,
+      `Рубеж: ${threshold} — ${milestone.title.toLocaleLowerCase('ru-RU')}.`,
+      milestone.icon
+    ]);
+  }
+}
 const insertAchievement = db.prepare('INSERT OR IGNORE INTO achievements (code,title,description,icon) VALUES (?,?,?,?)');
 for (const item of seedAchievements) insertAchievement.run(...item);
+
+function syncUserAchievements(userId, username = 'Участник') {
+  db.prepare('INSERT OR IGNORE INTO profiles(user_id,username) VALUES(?,?)').run(String(userId), safeText(username,100));
+  db.prepare("INSERT OR IGNORE INTO user_achievements(user_id,achievement_id) SELECT ?,id FROM achievements WHERE code='first_step'").run(String(userId));
+  const counts = {
+    chat: db.prepare('SELECT COUNT(*) AS count FROM chat_messages WHERE user_id=?').get(userId).count,
+    events: db.prepare('SELECT COUNT(*) AS count FROM event_rsvps WHERE user_id=?').get(userId).count,
+    gallery: db.prepare("SELECT COUNT(*) AS count FROM gallery_items WHERE user_id=? AND status='approved'").get(userId).count,
+    company: db.prepare('SELECT COUNT(*) AS count FROM company_posts WHERE user_id=?').get(userId).count
+  };
+  const grant = db.prepare('INSERT OR IGNORE INTO user_achievements(user_id,achievement_id) SELECT ?,id FROM achievements WHERE code=?');
+  for (const [group, milestone] of Object.entries(achievementMilestones)) {
+    for (const threshold of milestone.thresholds) {
+      if (counts[group] >= threshold) grant.run(userId, `${group}_${threshold}`);
+    }
+  }
+}
 
 const SQLiteStore = SQLiteStoreFactory(session);
 if (isProduction) app.set('trust proxy', 1);
@@ -296,6 +345,71 @@ app.get('/api/public', async (req, res) => {
     achievements: db.prepare('SELECT code,title,description,icon FROM achievements ORDER BY id').all()
   });
 });
+app.get('/api/chat/messages', async (req,res) => {
+  const messages=db.prepare('SELECT id,username,body,created_at FROM chat_messages ORDER BY id DESC LIMIT 100').all().reverse();
+  const isAdmin=req.session.user?await isAdminUser(req.session.user.id):false;
+  res.json({messages,isAdmin});
+});
+app.post('/api/chat/messages', requireLogin, ensureCsrf, (req,res) => {
+  const body=safeText(req.body?.body,500), user=req.session.user;
+  if(!body) return res.status(400).json({error:'Напиши сообщение до 500 символов.'});
+  const recent=db.prepare("SELECT COUNT(*) AS count FROM chat_messages WHERE user_id=? AND created_at>datetime('now','-1 minute')").get(String(user.id)).count;
+  if(recent>=6) return res.status(429).json({error:'Подожди минуту перед новыми сообщениями.'});
+  const result=db.prepare('INSERT INTO chat_messages(user_id,username,body) VALUES(?,?,?)').run(String(user.id),safeText(user.username,100),body);
+  syncUserAchievements(String(user.id), user.username);
+  res.status(201).json({ok:true,id:result.lastInsertRowid});
+});
+app.delete('/api/chat/messages/:id', requireAdmin, ensureCsrf, (req,res) => {
+  const result=db.prepare('DELETE FROM chat_messages WHERE id=?').run(Number(req.params.id));
+  if(!result.changes) return res.status(404).json({error:'Сообщение не найдено.'});
+  logAction(req,'chat.delete',`message=${req.params.id}`);
+  res.json({ok:true});
+});
+app.get('/api/leaderboard', (req,res) => {
+  const leaders=db.prepare(`SELECT p.username,COUNT(ua.achievement_id) AS achievements
+    FROM profiles p JOIN user_achievements ua ON ua.user_id=p.user_id
+    GROUP BY p.user_id,p.username ORDER BY achievements DESC,MAX(ua.earned_at) ASC,p.username COLLATE NOCASE ASC LIMIT 50`).all();
+  res.json({leaders});
+});
+app.get('/api/raffles', (req,res) => {
+  const userId=String(req.session.user?.id||'');
+  const raffles=db.prepare(`SELECT r.id,r.title,r.description,r.prize,r.end_at,r.status,r.winner_name,r.created_at,
+    (SELECT COUNT(*) FROM raffle_entries e WHERE e.raffle_id=r.id) AS entries,
+    EXISTS(SELECT 1 FROM raffle_entries e WHERE e.raffle_id=r.id AND e.user_id=?) AS entered
+    FROM raffles r ORDER BY CASE r.status WHEN 'open' THEN 0 ELSE 1 END,r.end_at DESC LIMIT 50`).all(userId);
+  res.json({raffles});
+});
+app.post('/api/admin/raffles', requireAdmin, ensureCsrf, (req,res) => {
+  const b=req.body||{}, title=safeText(b.title,100), description=safeText(b.description,500), prize=safeText(b.prize,150), endAt=new Date(b.end_at);
+  if(!title||!prize||Number.isNaN(endAt.getTime())||endAt.getTime()<=Date.now()) return res.status(400).json({error:'Укажи приз, название и будущую дату завершения.'});
+  const result=db.prepare('INSERT INTO raffles(title,description,prize,end_at,created_by) VALUES(?,?,?,?,?)').run(title,description,prize,endAt.toISOString(),String(req.session.user.id));
+  logAction(req,'raffle.create',`raffle=${result.lastInsertRowid}`);
+  res.status(201).json({ok:true,id:result.lastInsertRowid});
+});
+app.post('/api/raffles/:id/enter', requireLogin, ensureCsrf, (req,res) => {
+  const raffle=db.prepare('SELECT id,status,end_at FROM raffles WHERE id=?').get(Number(req.params.id));
+  if(!raffle||raffle.status!=='open'||new Date(raffle.end_at).getTime()<=Date.now()) return res.status(400).json({error:'Этот розыгрыш уже завершён.'});
+  const user=req.session.user;
+  const result=db.prepare('INSERT OR IGNORE INTO raffle_entries(raffle_id,user_id,username) VALUES(?,?,?)').run(raffle.id,String(user.id),safeText(user.username,100));
+  res.status(result.changes?201:200).json({ok:true,entered:true});
+});
+app.delete('/api/raffles/:id/enter', requireLogin, ensureCsrf, (req,res) => {
+  const raffle=db.prepare('SELECT id,status,end_at FROM raffles WHERE id=?').get(Number(req.params.id));
+  if(!raffle||raffle.status!=='open'||new Date(raffle.end_at).getTime()<=Date.now()) return res.status(400).json({error:'Уже нельзя отменить участие в завершённом розыгрыше.'});
+  db.prepare('DELETE FROM raffle_entries WHERE raffle_id=? AND user_id=?').run(raffle.id,String(req.session.user.id));
+  res.json({ok:true,entered:false});
+});
+app.post('/api/admin/raffles/:id/draw', requireAdmin, ensureCsrf, (req,res) => {
+  const raffle=db.prepare("SELECT id,status,end_at FROM raffles WHERE id=?").get(Number(req.params.id));
+  if(!raffle) return res.status(404).json({error:'Розыгрыш не найден.'});
+  if(raffle.status!=='open') return res.status(400).json({error:'Для этого розыгрыша победитель уже выбран.'});
+  if(new Date(raffle.end_at).getTime()>Date.now()) return res.status(400).json({error:'Розыгрыш ещё не завершился.'});
+  const entries=db.prepare('SELECT user_id,username FROM raffle_entries WHERE raffle_id=?').all(raffle.id);
+  const winner=entries.length?entries[crypto.randomInt(entries.length)]:null;
+  db.transaction(()=>db.prepare("UPDATE raffles SET status='ended',winner_user_id=?,winner_name=? WHERE id=? AND status='open'").run(winner?.user_id||null,winner?.username||null,raffle.id))();
+  logAction(req,'raffle.draw',`raffle=${raffle.id}; entries=${entries.length}`);
+  res.json({ok:true,winner:winner?.username||null,entries:entries.length});
+});
 app.post('/api/applications', (req, res) => {
   const body = req.body || {};
   if (!validateRequired(body, ['name', 'discord_tag', 'role', 'message'])) return res.status(400).json({ error: 'Заполните все поля.' });
@@ -372,8 +486,12 @@ app.get('/api/profile', requireLogin, async (req, res) => {
     profile = db.prepare('SELECT * FROM profiles WHERE user_id=?').get(String(u.id));
   }
   db.prepare("INSERT OR IGNORE INTO user_achievements (user_id,achievement_id) SELECT ?,id FROM achievements WHERE code='first_step'").run(String(u.id));
+  syncUserAchievements(String(u.id), u.username);
   const guildMembership = await getDiscordGuildMembership(String(u.id));
-  res.json({ profile, guildMembership, achievements: db.prepare('SELECT a.code,a.title,a.description,a.icon,ua.earned_at FROM user_achievements ua JOIN achievements a ON a.id=ua.achievement_id WHERE ua.user_id=? ORDER BY ua.earned_at').all(String(u.id)) });
+  const achievements=db.prepare(`SELECT a.code,a.title,a.description,a.icon,ua.earned_at,
+    CASE WHEN ua.user_id IS NULL THEN 0 ELSE 1 END AS unlocked
+    FROM achievements a LEFT JOIN user_achievements ua ON ua.achievement_id=a.id AND ua.user_id=? ORDER BY a.id`).all(String(u.id));
+  res.json({ profile, guildMembership, achievements });
 });
 app.put('/api/profile', requireLogin, ensureCsrf, (req,res) => {
   const b=req.body||{};
@@ -402,6 +520,7 @@ app.post('/api/company', requireLogin, ensureCsrf, (req,res) => {
   const recent=db.prepare("SELECT COUNT(*) n FROM company_posts WHERE user_id=? AND created_at > datetime('now','-30 minutes')").get(String(u.id)).n;
   if(recent>=3) return res.status(429).json({error:'Можно создать не больше 3 запросов за 30 минут.'});
   const r=db.prepare("INSERT INTO company_posts(user_id,username,activity,details,game,available_at,expires_at) VALUES(?,?,?,?,?,?,datetime('now','+12 hours'))").run(String(u.id),safeText(u.username,100),activity,details,game,availableAt);
+  syncUserAchievements(String(u.id), u.username);
   logAction(req,'company.create',`post=${r.lastInsertRowid}`); res.status(201).json({ok:true,id:r.lastInsertRowid});
 });
 app.post('/api/company/:id/respond', requireLogin, ensureCsrf, (req,res) => {
@@ -421,6 +540,7 @@ app.post('/api/events/:id/rsvp', requireLogin, ensureCsrf, (req,res) => {
   const u=req.session.user;
   db.prepare('INSERT OR IGNORE INTO event_rsvps(event_id,user_id,username) VALUES(?,?,?)').run(id,String(u.id),safeText(u.username,100));
   db.prepare("INSERT OR IGNORE INTO user_achievements(user_id,achievement_id) SELECT ?,id FROM achievements WHERE code='event_guest'").run(String(u.id));
+  syncUserAchievements(String(u.id), u.username);
   res.status(201).json({ok:true});
 });
 app.delete('/api/events/:id/rsvp', requireLogin, ensureCsrf, (req,res) => {
@@ -473,7 +593,7 @@ app.get('/api/admin/gallery', requireAdmin, (req,res)=>res.json(db.prepare('SELE
 app.patch('/api/admin/gallery/:id', requireAdmin, ensureCsrf, (req,res)=>{
   const status=String(req.body?.status||''); if(!['approved','rejected','pending'].includes(status)) return res.status(400).json({error:'Недопустимый статус.'});
   const r=db.prepare('UPDATE gallery_items SET status=? WHERE id=?').run(status,Number(req.params.id)); if(!r.changes) return res.status(404).json({error:'Работа не найдена.'});
-  if(status==='approved'){const item=db.prepare('SELECT user_id FROM gallery_items WHERE id=?').get(Number(req.params.id));db.prepare("INSERT OR IGNORE INTO user_achievements(user_id,achievement_id) SELECT ?,id FROM achievements WHERE code='gallery_artist'").run(item.user_id);}
+  if(status==='approved'){const item=db.prepare('SELECT user_id,username FROM gallery_items WHERE id=?').get(Number(req.params.id));db.prepare("INSERT OR IGNORE INTO user_achievements(user_id,achievement_id) SELECT ?,id FROM achievements WHERE code='gallery_artist'").run(item.user_id);syncUserAchievements(String(item.user_id), item.username);}
   logAction(req,'gallery.moderate',`item=${req.params.id}; status=${status}`); res.json({ok:true});
 });
 app.get('/api/admin/analytics', requireAdmin, (req,res)=>{

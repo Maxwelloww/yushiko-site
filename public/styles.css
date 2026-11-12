@@ -271,3 +271,48 @@ body{position:relative;isolation:isolate;background:transparent}
 .gallery-dialog-close{position:absolute;top:10px;right:10px;float:none;margin:0}
 @media(max-width:1000px){.main-nav{gap:7px;font-size:.62rem}.page-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){.main-nav{max-height:calc(100vh - 70px);overflow-y:auto}.home-hero{min-height:310px;padding:28px 20px}.home-server,.info-stats{align-items:flex-start;flex-wrap:wrap;padding:15px}.page-card-grid,.page-content-grid,.command-grid{grid-template-columns:1fr}.page-banner,.page-banner-shop{aspect-ratio:2.5/1;max-height:220px}.command-card{align-items:flex-start;flex-direction:column;gap:7px}.command-card code{min-width:0}.subpage{padding-top:25px;padding-bottom:45px}.page-intro{margin:24px 0}.home-hero h1{font-size:clamp(3.6rem,18vw,6rem)}}
+
+/* Community pages: still monochrome, with the character and spider lily as the visual focus. */
+.petal-field,.petal-field:before,.petal-field:after{display:none!important;animation:none!important}
+.main-nav{gap:clamp(5px,.65vw,9px);font-size:clamp(.56rem,.68vw,.68rem)}
+.home-hero{position:relative;isolation:isolate;overflow:hidden;background-image:linear-gradient(90deg,#070808f5 0%,#070808e8 32%,#07080883 58%,#07080825 100%),url('/images/shop-character.jpg'),url('/images/spider-lily-bg.jpg');background-size:cover,auto 100%,cover;background-position:center,right center,center 56%;background-repeat:no-repeat}
+.home-hero .eyebrow{display:flex;align-items:center;gap:8px}
+.hero-lily-mark{font-family:var(--serif);font-size:1.25rem;color:#e8e5df;animation:lily-glow 4s ease-in-out infinite}
+@keyframes lily-glow{0%,100%{opacity:.65;transform:rotate(-8deg)}50%{opacity:1;transform:rotate(8deg)}}
+.home-hero-caption{position:absolute;right:18px;bottom:14px;color:#eee9;font-family:var(--serif);font-size:.72rem;letter-spacing:.12em}
+.server-about{display:flex;align-items:end;justify-content:space-between;gap:24px;margin-top:45px;margin-bottom:25px;padding:0 0 20px;border-bottom:1px solid #ffffff2b}
+.server-about h2{margin:8px 0;font-family:var(--serif);font-size:clamp(1.8rem,4vw,3rem);font-weight:400}
+.server-about p:not(.eyebrow){max-width:760px;margin:0;color:#bdbdb8;font-size:.8rem}
+.server-about .text-link{flex:0 0 auto}
+.raffle-admin{margin:18px 0 28px;padding:20px;border:1px solid #ffffff35;background:#111212e8}
+.raffle-admin h2{font-family:var(--serif);font-size:1.5rem;font-weight:400;margin:0 0 14px}
+.raffle-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:12px}
+.raffle-card{position:relative;padding:20px;border:1px solid #ffffff2a;background:linear-gradient(145deg,#171918ed,#090a0af5);animation:fadein .45s both}
+.raffle-card h2{font-family:var(--serif);font-weight:500;font-size:1.5rem;margin:5px 0}
+.raffle-card p{color:#bdbdb8;font-size:.78rem}
+.raffle-prize{display:inline-block;padding:5px 9px;border:1px solid #666;color:#f4f2ec;font-size:.7rem}
+.raffle-meta{display:flex;justify-content:space-between;gap:10px;margin:14px 0;color:#aaa;font-size:.65rem}
+.raffle-status{font-size:.62rem;color:#d8d5cc;text-transform:uppercase;letter-spacing:.1em}
+.raffle-actions{display:flex;align-items:center;gap:9px;margin-top:14px}
+.chat-panel{max-width:900px;border:1px solid #ffffff2b;background:#0c0d0dee}
+.chat-messages{height:min(58vh,620px);min-height:260px;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:9px;scroll-behavior:smooth}
+.chat-message{padding:11px 13px;border:1px solid #ffffff1d;background:#121414}
+.chat-message-head{display:flex;align-items:center;justify-content:space-between;gap:10px;color:#cfcfc9;font-size:.68rem}
+.chat-message-head time,.achievement-state{color:#91918c;font-size:.58rem}
+.chat-message p{margin:6px 0 0;color:#eee;font-size:.78rem;white-space:pre-wrap;overflow-wrap:anywhere}
+.chat-message-delete{margin-top:7px;padding:4px 8px;border:1px solid #555;background:#161616;color:#ddd;font-size:.58rem;cursor:pointer}
+.chat-form{display:grid;grid-template-columns:1fr auto;gap:10px;padding:14px;border-top:1px solid #ffffff24}
+.chat-form textarea{width:100%;resize:vertical;min-height:44px;padding:11px;border:1px solid #444;background:#090a0a;color:#f2f2ee;font:inherit;font-size:.75rem}
+.chat-form .form-message{grid-column:1/-1;margin:0}
+.leaderboard-list{display:grid;gap:8px;max-width:850px}
+.leaderboard-row{display:grid;grid-template-columns:52px 1fr auto;align-items:center;gap:14px;padding:13px 16px;border:1px solid #ffffff25;background:#101212}
+.leaderboard-rank{font-family:var(--serif);font-size:1.35rem;color:#d8d4ca}
+.leaderboard-name{font-size:.8rem}
+.leaderboard-score{color:#ddd;font-size:.7rem}
+.achievement.is-locked{opacity:.48;filter:grayscale(1)}
+.achievement-state{display:block;margin:4px 0 0}
+@media(max-width:1000px){.main-nav{gap:6px;font-size:.58rem}}
+@media(max-width:700px){.home-hero{background-size:cover,auto 74%,cover;background-position:center,right bottom,center 56%;padding-bottom:48px}.home-hero-caption{right:12px;bottom:10px;font-size:.58rem}.server-about{align-items:flex-start;flex-direction:column;margin-top:30px}.server-about .text-link{margin-top:0}.chat-form{grid-template-columns:1fr}.chat-form .form-message{grid-column:auto}.leaderboard-row{grid-template-columns:38px 1fr auto;gap:8px;padding:11px}}
+@media(prefers-reduced-motion:reduce){.hero-lily-mark{animation:none}.raffle-card{animation:none}.chat-messages{scroll-behavior:auto}}
+
+[hidden]{display:none!important}

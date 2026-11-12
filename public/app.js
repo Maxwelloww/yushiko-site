@@ -101,6 +101,15 @@ async function loadProfile(){
     const achievements=data.achievements||[];
     box.innerHTML=`<div class="profile-card"><div class="profile-avatar">${avatarMarkup}</div><div class="profile-main"><div class="profile-title-row"><div><p class="eyebrow">УЧАСТНИК MITERIA</p><h3>${esc(data.profile.username)}</h3></div><span class="profile-connected"><i>✓</i> Discord подключён</span></div><p class="profile-bio">${esc(data.profile.bio||'Расскажи немного о себе — добавь описание профиля.')}</p><div class="discord-roles"><div class="discord-roles-heading"><strong>Твои роли на сервере</strong><button class="small-button" id="refreshProfileRoles" type="button">Обновить</button><span class="discord-role-status ${membership.status==='ok'?'is-checked':''}">${membership.status==='ok'?'ПРОВЕРЕНО DISCORD':'СТАТУС РОЛЕЙ'}</span></div><div class="discord-role-list">${rolesMarkup}</div>${joinedMarkup}</div><form id="profileForm" class="profile-form"><label>О себе<textarea name="bio" maxlength="240" rows="3" placeholder="До 240 символов">${esc(data.profile.bio)}</textarea></label><div class="profile-form-footer"><button class="button button-light" type="submit">Сохранить описание</button><span id="profileMessage" class="form-message" role="status"></span></div></form><div class="achievement-launch"><span>Твои достижения в сообществе</span><button class="button button-outline" type="button" id="achievementsOpen">✦ Открыть достижения (${achievements.length}) ↗</button></div></div></div><dialog class="achievements-dialog" id="achievementsDialog" aria-labelledby="achievementsTitle"><div class="achievements-dialog-head"><div><p class="eyebrow">— ТВОЯ ИСТОРИЯ</p><h3 id="achievementsTitle">Достижения</h3></div><button class="achievements-close" type="button" data-close-achievements aria-label="Закрыть">×</button></div><div class="achievement-modal-grid">${achievements.length?achievements.map(item=>`<article class="achievement"><span>${esc(item.icon)}</span><div><strong>${esc(item.title)}</strong><p>${esc(item.description)}</p></div></article>`).join(''):'<p class="muted">Достижения появятся по мере участия в жизни сообщества.</p>'}</div></dialog>`;
     const dialog=$('#achievementsDialog');
+    const earnedAchievements=achievements.filter(item=>Boolean(item.unlocked)).length;
+    $('#achievementsOpen').textContent=`✦ Достижения ${earnedAchievements}/100 ↗`;
+    dialog?.querySelectorAll('.achievement-modal-grid .achievement').forEach((card,index)=>{
+      const item=achievements[index],state=document.createElement('small');
+      state.className='achievement-state';
+      state.textContent=item?.unlocked?(item.earned_at?`Получено · ${dateLabel(item.earned_at)}`:'Получено'):'Пока закрыто';
+      if(!item?.unlocked)card.classList.add('is-locked');
+      card.append(state);
+    });
     $('#achievementsOpen')?.addEventListener('click',()=>dialog?.showModal());
     dialog?.querySelector('[data-close-achievements]')?.addEventListener('click',()=>dialog.close());
     dialog?.addEventListener('click',event=>{if(event.target===dialog)dialog.close();});
