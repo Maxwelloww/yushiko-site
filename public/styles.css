@@ -311,8 +311,17 @@ body{position:relative;isolation:isolate;background:transparent}
 .leaderboard-score{color:#ddd;font-size:.7rem}
 .achievement.is-locked{opacity:.48;filter:grayscale(1)}
 .achievement-state{display:block;margin:4px 0 0}
+.nav-more{position:relative;white-space:nowrap}
+.nav-more summary{list-style:none;cursor:pointer;color:#ddd;padding:0 2px}
+.nav-more summary::-webkit-details-marker{display:none}
+.nav-more summary:after{content:'⌄';margin-left:5px;color:#aaa}
+.nav-more[open] summary:after{content:'⌃'}
+.nav-more-menu{position:absolute;z-index:30;right:0;top:calc(100% + 13px);min-width:170px;padding:6px;background:#0b0b0bf7;border:1px solid #555;box-shadow:0 12px 28px #000a;display:grid;gap:2px}
+.nav-more-menu a{display:block;padding:9px 11px;color:#ddd!important;font-size:.68rem}
+.nav-more-menu a:after{display:none}
+.nav-more-menu a:hover,.nav-more-menu a[aria-current="page"]{background:#ffffff14;color:#fff!important}
 @media(max-width:1000px){.main-nav{gap:6px;font-size:.58rem}}
-@media(max-width:700px){.home-hero{background-size:cover,auto 74%,cover;background-position:center,right bottom,center 56%;padding-bottom:48px}.home-hero-caption{right:12px;bottom:10px;font-size:.58rem}.server-about{align-items:flex-start;flex-direction:column;margin-top:30px}.server-about .text-link{margin-top:0}.chat-form{grid-template-columns:1fr}.chat-form .form-message{grid-column:auto}.leaderboard-row{grid-template-columns:38px 1fr auto;gap:8px;padding:11px}}
+@media(max-width:700px){.home-hero{background-size:cover,auto 74%,cover;background-position:center,right bottom,center 56%;padding-bottom:48px}.home-hero-caption{right:12px;bottom:10px;font-size:.58rem}.server-about{align-items:flex-start;flex-direction:column;margin-top:30px}.server-about .text-link{margin-top:0}.chat-form{grid-template-columns:1fr}.chat-form .form-message{grid-column:auto}.leaderboard-row{grid-template-columns:38px 1fr auto;gap:8px;padding:11px}.nav-more{width:100%;padding:10px 0;border-bottom:1px solid #ffffff0d}.nav-more summary{font-size:.8rem}.nav-more-menu{position:static;min-width:0;margin:10px 0 0;padding:5px 10px;background:#ffffff08;border:0;border-left:1px solid #555;box-shadow:none}.nav-more-menu a{padding:9px;font-size:.78rem}}
 @media(prefers-reduced-motion:reduce){.hero-lily-mark{animation:none}.raffle-card{animation:none}.chat-messages{scroll-behavior:auto}}
 
 [hidden]{display:none!important}
