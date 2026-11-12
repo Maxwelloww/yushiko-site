@@ -223,3 +223,51 @@ body{position:relative;isolation:isolate;background:transparent}
 .discord-roles-heading .small-button{margin-left:auto}
 @media(max-width:700px){.board-filters{align-items:stretch;flex-direction:column}.board-filters label,.board-filters select,.board-filters input{width:100%;min-width:0}.gallery-dialog-close{margin:8px -44px -44px 0}}
 @media(prefers-reduced-motion:reduce){.hero-copy{animation:none}.reveal-on-scroll{opacity:1;transform:none;transition:none}.interest-card,.role-shop-card,.company-card,.news-card,.content-row,.gallery-card,.gallery-open img{transition:none}}
+
+/* Separate site pages */
+.main-nav{gap:clamp(5px,.7vw,11px);font-size:clamp(.58rem,.72vw,.72rem)}
+.main-nav a[aria-current="page"]{color:#fff}
+.main-nav a[aria-current="page"]:after{transform:scaleX(1)}
+.subpage{min-height:62vh;padding-top:42px;padding-bottom:70px}
+.page-intro{max-width:760px;margin:32px 0}
+.page-intro h1,.home-hero h1{font-family:var(--serif);font-weight:400;font-size:clamp(2.6rem,6vw,5rem);line-height:1;margin:12px 0}
+.page-intro>p:last-child,.home-hero>p:not(.eyebrow){max-width:700px;color:#c1c1bd;font-size:.9rem}
+.page-banner{display:block;width:100%;max-height:300px;aspect-ratio:4.4/1;object-fit:cover;border:1px solid #ffffff30;margin:0 auto 28px}
+.page-banner-shop{max-height:380px;aspect-ratio:5/1}
+.home-page{padding-top:22px}
+.home-hero{padding:clamp(30px,7vw,86px);min-height:360px;border:1px solid #ffffff25;background:linear-gradient(90deg,#070808ed 0%,#070808a8 60%,#07080835 100%),url('/images/spider-lily-bg.jpg') center 54%/cover no-repeat;display:flex;flex-direction:column;align-items:flex-start;justify-content:center}
+.home-hero h1{font-size:clamp(4rem,10vw,8rem);letter-spacing:.015em;margin:5px 0}
+.home-hero>p:not(.eyebrow){max-width:550px;margin:10px 0;color:#eee}
+.home-server,.info-stats{display:flex;align-items:center;justify-content:space-between;gap:22px;padding:18px 22px;margin-top:18px;margin-bottom:30px;border-top:1px solid #ffffff30;border-bottom:1px solid #ffffff30;background:#070808b5}
+.home-server h2{margin:0;font-family:var(--serif);font-size:1.5rem;font-weight:400}
+.home-server>div:not(:first-child),.info-stats article{display:grid;gap:3px;min-width:100px}
+.home-server small,.info-stats small{color:#aaa;font-size:.65rem}
+.home-server strong,.info-stats strong{font-size:1rem}
+.page-card-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding-bottom:62px}
+.page-link-card{min-width:0;min-height:150px;padding:18px;border:1px solid #ffffff25;background:#0c0d0de8;display:flex;flex-direction:column;justify-content:flex-end;gap:5px;transition:transform .25s,border-color .25s,background .25s}
+.page-link-card:hover{transform:translateY(-4px);border-color:#aaa;background:#141515}
+.image-link-card{position:relative;min-height:200px;padding:14px;overflow:hidden;isolation:isolate}
+.image-link-card:before{content:"";position:absolute;inset:0;background:linear-gradient(0deg,#050505ec 0%,#05050530 74%);z-index:-1}
+.image-link-card img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:-2;transition:transform .55s ease}
+.image-link-card:hover img{transform:scale(1.035)}
+.image-link-card span,.text-link-card strong{font-family:var(--serif);font-size:1.35rem;font-weight:500}
+.page-link-card small{color:#b1b1ad;font-size:.66rem}
+.text-link-card .card-symbol{font-size:1.5rem;margin-bottom:auto;color:#ddd}
+.page-content-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:30px 0}
+.page-content-grid article{padding:22px;border:1px solid #ffffff26;background:#0d0e0edb}
+.page-content-grid h2{font-family:var(--serif);font-weight:500;font-size:1.5rem;margin:0 0 9px}
+.page-content-grid p{color:#bbb;font-size:.78rem}
+.text-link{display:inline-block;margin-top:10px;color:#eee;font-size:.72rem}
+.info-stats{margin-top:18px;margin-bottom:35px}
+.command-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.command-card{display:flex;align-items:center;gap:18px;padding:16px 18px;border:1px solid #ffffff25;background:#0c0d0de8;transition:transform .2s,border-color .2s}
+.command-card:hover{transform:translateX(3px);border-color:#aaa}
+.command-card code{min-width:145px;color:#fff;font-family:Consolas,monospace;font-size:.95rem}
+.command-card p{margin:0;color:#c2c2be;font-size:.76rem}
+.command-note{margin-top:20px;color:#aaa;font-size:.72rem}
+.page-content-grid+.button{margin:0 0 25px}
+.role-shop-card h2{margin:0;font-family:var(--serif);font-size:1.25rem;font-weight:500}
+.gallery-dialog{position:fixed}
+.gallery-dialog-close{position:absolute;top:10px;right:10px;float:none;margin:0}
+@media(max-width:1000px){.main-nav{gap:7px;font-size:.62rem}.page-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.main-nav{max-height:calc(100vh - 70px);overflow-y:auto}.home-hero{min-height:310px;padding:28px 20px}.home-server,.info-stats{align-items:flex-start;flex-wrap:wrap;padding:15px}.page-card-grid,.page-content-grid,.command-grid{grid-template-columns:1fr}.page-banner,.page-banner-shop{aspect-ratio:2.5/1;max-height:220px}.command-card{align-items:flex-start;flex-direction:column;gap:7px}.command-card code{min-width:0}.subpage{padding-top:25px;padding-bottom:45px}.page-intro{margin:24px 0}.home-hero h1{font-size:clamp(3.6rem,18vw,6rem)}}

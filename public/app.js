@@ -2,7 +2,7 @@ const $ = (s, root=document) => root.querySelector(s);
 const esc = (value='') => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const dateLabel = value => { const d = new Date(value); return Number.isNaN(d.getTime()) ? 'Дата уточняется' : d.toLocaleDateString('ru-RU',{day:'2-digit',month:'short',year:'numeric'}); };
 
-$('#year').textContent = new Date().getFullYear();
+if ($('#year')) $('#year').textContent = new Date().getFullYear();
 const menuToggle = $('#menuToggle'), nav = $('#mainNav');
 menuToggle?.addEventListener('click', () => { const open = nav.classList.toggle('open'); menuToggle.setAttribute('aria-expanded', String(open)); });
 nav?.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { nav.classList.remove('open'); menuToggle?.setAttribute('aria-expanded','false'); }));
@@ -14,7 +14,7 @@ if ('IntersectionObserver' in window && !window.matchMedia('(prefers-reduced-mot
       revealObserver.unobserve(entry.target);
     }
   }, { threshold: 0.12, rootMargin: '0px 0px -28px 0px' });
-  document.querySelectorAll('main > section:not(.hero), .promise-strip, .team-section').forEach(element => {
+  document.querySelectorAll('main > section:not(.hero), .subpage > *, .promise-strip, .team-section').forEach(element => {
     element.classList.add('reveal-on-scroll');
     revealObserver.observe(element);
   });
@@ -25,21 +25,25 @@ async function loadPublic() {
     const res = await fetch('/api/public');
     if (!res.ok) throw new Error('API unavailable');
     const data = await res.json();
-    if (data.inviteUrl) $('#joinButton').href = data.inviteUrl;
-    if (data.discord?.guild) $('#guildName').textContent = data.discord.guild;
-    if (data.discord?.members !== null && data.discord?.members !== undefined) $('#memberCount').textContent = Number(data.discord.members).toLocaleString('ru-RU');
-    if (data.discord?.online !== null && data.discord?.online !== undefined) $('#onlineCount').textContent = Number(data.discord.online).toLocaleString('ru-RU');
+    if (data.inviteUrl && $('#joinButton')) $('#joinButton').href = data.inviteUrl;
+    if (data.discord?.guild && $('#guildName')) $('#guildName').textContent = data.discord.guild;
+    if ($('#memberCount') && data.discord?.members !== null && data.discord?.members !== undefined) $('#memberCount').textContent = Number(data.discord.members).toLocaleString('ru-RU');
+    if ($('#onlineCount') && data.discord?.online !== null && data.discord?.online !== undefined) $('#onlineCount').textContent = Number(data.discord.online).toLocaleString('ru-RU');
     const eventList = $('#eventList');
-    if (!data.events?.length) eventList.innerHTML = '<div class="empty-state">Пока нет запланированных событий. Следи за новостями!</div>';
-    else eventList.innerHTML = data.events.map(e => { const date=new Date(e.event_date), past=date.getTime()<Date.now(), attending=Boolean(e.attending); return `<article class="content-row fade-in"><div class="content-date"><strong>${esc(date.toLocaleDateString('ru-RU',{day:'2-digit'}))}</strong>${esc(date.toLocaleDateString('ru-RU',{month:'short'}))}</div><div><h3>${esc(e.title)}</h3><p>${esc(e.description)}</p><small class="muted">${Number(e.attendees||0)} записались</small></div><div class="event-actions"><span class="content-tag">${esc(e.location || 'Discord')}</span><button class="small-button rsvp-button" data-rsvp="${e.id}" data-attending="${attending}" ${past?'disabled':''}>${past?'Завершено':attending?'Отменить запись':'Записаться'}</button></div></article>`; }).join('');
+    if (eventList) {
+      if (!data.events?.length) eventList.innerHTML = '<div class="empty-state">Пока нет запланированных событий. Следи за новостями!</div>';
+      else eventList.innerHTML = data.events.map(e => { const date=new Date(e.event_date), past=date.getTime()<Date.now(), attending=Boolean(e.attending); return `<article class="content-row fade-in"><div class="content-date"><strong>${esc(date.toLocaleDateString('ru-RU',{day:'2-digit'}))}</strong>${esc(date.toLocaleDateString('ru-RU',{month:'short'}))}</div><div><h3>${esc(e.title)}</h3><p>${esc(e.description)}</p><small class="muted">${Number(e.attendees||0)} записались</small></div><div class="event-actions"><span class="content-tag">${esc(e.location || 'Discord')}</span><button class="small-button rsvp-button" data-rsvp="${e.id}" data-attending="${attending}" ${past?'disabled':''}>${past?'Завершено':attending?'Отменить запись':'Записаться'}</button></div></article>`; }).join('');
+    }
     const newsList = $('#newsList');
     renderGallery(data.gallery || []);
     renderCompany(data.company || []);
-    if (!data.news?.length) newsList.innerHTML = '<div class="empty-state">Новостей пока нет.</div>';
-    else newsList.innerHTML = data.news.map(n => `<article class="news-card fade-in"><time>${esc(dateLabel(n.created_at))}</time><h3>${esc(n.title)}</h3><p>${esc(n.body)}</p></article>`).join('');
+    if (newsList) {
+      if (!data.news?.length) newsList.innerHTML = '<div class="empty-state">Новостей пока нет.</div>';
+      else newsList.innerHTML = data.news.map(n => `<article class="news-card fade-in"><time>${esc(dateLabel(n.created_at))}</time><h3>${esc(n.title)}</h3><p>${esc(n.body)}</p></article>`).join('');
+    }
   } catch {
-    $('#eventList').innerHTML = '<div class="empty-state">Не удалось загрузить события. Попробуй обновить страницу.</div>';
-    $('#newsList').innerHTML = '<div class="empty-state">Не удалось загрузить новости.</div>';
+    if ($('#eventList')) $('#eventList').innerHTML = '<div class="empty-state">Не удалось загрузить события. Попробуй обновить страницу.</div>';
+    if ($('#newsList')) $('#newsList').innerHTML = '<div class="empty-state">Не удалось загрузить новости.</div>';
   }
 }
 loadPublic();
