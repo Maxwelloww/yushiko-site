@@ -191,3 +191,35 @@ body{position:relative;isolation:isolate;background:transparent}
 .promise-strip>div:not(.strip-note){justify-content:flex-start;padding:0 18px}
 .promise-strip p{font-size:.7rem}
 .intro-art>span:first-child{font-family:inherit;font-style:normal;font-size:.72rem;letter-spacing:.08em;max-width:none;transform:none;padding:8px 11px;border:1px solid #ffffff55;background:#080909a8}
+
+/* Small motion cues, with reduced-motion support handled below. */
+.hero-copy{animation:hero-arrive .75s cubic-bezier(.2,.7,.2,1) both}
+@keyframes hero-arrive{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+.reveal-on-scroll{opacity:0;transform:translateY(18px);transition:opacity .65s ease,transform .65s cubic-bezier(.2,.7,.2,1)}
+.reveal-on-scroll.is-visible{opacity:1;transform:none}
+.interest-card,.role-shop-card,.company-card,.news-card,.content-row,.gallery-card{transition:transform .28s ease,border-color .28s ease,box-shadow .28s ease}
+.interest-card:hover,.role-shop-card:hover,.company-card:hover,.news-card:hover,.gallery-card:hover{transform:translateY(-4px);box-shadow:0 16px 35px #0005}
+.button:active,.small-button:active{transform:scale(.97)}
+.board-filters{display:flex;align-items:end;gap:12px;margin:0 0 18px}
+.board-filters label{display:grid;gap:6px;color:#aaa;font-size:.68rem}
+.board-filters select,.board-filters input{min-width:190px;padding:10px 12px;border:1px solid #444;background:#0b0b0b;color:#eee;border-radius:3px}
+.gallery-filters{margin-top:-12px}
+.gallery-open{display:block;width:100%;padding:0;border:0;background:transparent;cursor:zoom-in;overflow:hidden}
+.gallery-open img{width:100%;aspect-ratio:1.25;object-fit:cover;display:block;filter:grayscale(1);transition:filter .4s,transform .55s}
+.gallery-card:hover .gallery-open img{filter:grayscale(.1);transform:scale(1.045)}
+.gallery-category-chip{display:inline-block;margin-bottom:4px;padding:3px 7px;border:1px solid #444;color:#c7c7c2;font-size:.56rem;letter-spacing:.04em}
+.gallery-dialog{position:fixed;width:min(900px,calc(100% - 28px));max-height:90vh;padding:0;border:1px solid #5a5a5a;background:#0c0c0c;color:#f5f5f1;box-shadow:0 28px 100px #000c;overflow:auto}
+.gallery-dialog::backdrop{background:#000c;backdrop-filter:blur(5px)}
+.gallery-dialog[open]{animation:gallery-open .22s ease-out}
+@keyframes gallery-open{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
+.gallery-dialog>img{display:block;width:100%;max-height:68vh;object-fit:contain;background:#050505}
+.gallery-dialog-close{position:sticky;top:10px;float:right;z-index:1;margin:10px -42px -48px 0;width:36px;height:36px;border:1px solid #777;background:#111;color:#fff;font-size:1.5rem;cursor:pointer}
+.gallery-dialog-copy{padding:18px 22px}
+.gallery-dialog-copy strong{display:block;font-family:var(--serif);font-size:1.4rem;font-weight:500}
+.gallery-dialog-copy span,.profile-joined{color:#aaa;font-size:.72rem}
+.gallery-dialog-copy p{margin:10px 0 0;color:#ccc;font-size:.84rem}
+.profile-joined{margin:10px 0 0}
+.discord-roles-heading{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.discord-roles-heading .small-button{margin-left:auto}
+@media(max-width:700px){.board-filters{align-items:stretch;flex-direction:column}.board-filters label,.board-filters select,.board-filters input{width:100%;min-width:0}.gallery-dialog-close{margin:8px -44px -44px 0}}
+@media(prefers-reduced-motion:reduce){.hero-copy{animation:none}.reveal-on-scroll{opacity:1;transform:none;transition:none}.interest-card,.role-shop-card,.company-card,.news-card,.content-row,.gallery-card,.gallery-open img{transition:none}}

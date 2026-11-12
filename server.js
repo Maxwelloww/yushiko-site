@@ -68,12 +68,12 @@ CREATE TABLE IF NOT EXISTS user_achievements (
 );
 CREATE TABLE IF NOT EXISTS gallery_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, username TEXT NOT NULL,
-  title TEXT NOT NULL, image_url TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL, image_url TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', category TEXT NOT NULL DEFAULT 'Другое',
   status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS company_posts (
   id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, username TEXT NOT NULL,
-  activity TEXT NOT NULL, details TEXT NOT NULL DEFAULT '', game TEXT NOT NULL DEFAULT '',
+  activity TEXT NOT NULL, details TEXT NOT NULL DEFAULT '', game TEXT NOT NULL DEFAULT '', available_at TEXT,
   status TEXT NOT NULL DEFAULT 'open', expires_at TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -109,6 +109,13 @@ CREATE TABLE IF NOT EXISTS system_logs (
   message TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 `);
+for (const [table, column, definition] of [
+  ['gallery_items', 'category', "TEXT NOT NULL DEFAULT 'Другое'"],
+  ['company_posts', 'available_at', 'TEXT']
+]) {
+  const columns = db.pragma(`table_info(${table})`);
+  if (!columns.some(item => item.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
 const seedNews = db.prepare('SELECT COUNT(*) AS n FROM news').get().n;
 if (!seedNews) {
   db.prepare('INSERT INTO news (title, body) VALUES (?, ?)').run('Добро пожаловать в Miteria!', 'Мы рады видеть тебя в нашем сообществе. Знакомься, общайся и участвуй в событиях.');
@@ -283,9 +290,9 @@ app.get('/api/public', async (req, res) => {
     inviteUrl,
     discord,
     news: db.prepare('SELECT id, title, body, created_at FROM news ORDER BY id DESC LIMIT 6').all(),
-    company: db.prepare("SELECT p.id,p.username,p.activity,p.details,p.game,p.created_at,p.expires_at,(SELECT COUNT(*) FROM company_responses r WHERE r.post_id=p.id) AS responses FROM company_posts p WHERE p.status='open' AND p.expires_at>datetime('now') ORDER BY p.id DESC LIMIT 8").all(),
-    events: db.prepare("SELECT e.id, e.title, e.description, e.event_date, e.location, e.status, (SELECT COUNT(*) FROM event_rsvps r WHERE r.event_id=e.id) AS attendees FROM events e WHERE e.status != 'cancelled' ORDER BY e.event_date ASC LIMIT 24").all(),
-    gallery: db.prepare("SELECT id,username,title,image_url,description,created_at FROM gallery_items WHERE status='approved' ORDER BY id DESC LIMIT 12").all(),
+    company: db.prepare("SELECT p.id,p.username,p.activity,p.details,p.game,p.available_at,p.created_at,p.expires_at,(SELECT COUNT(*) FROM company_responses r WHERE r.post_id=p.id) AS responses,EXISTS(SELECT 1 FROM company_responses r WHERE r.post_id=p.id AND r.user_id=?) AS responded FROM company_posts p WHERE p.status='open' AND p.expires_at>datetime('now') ORDER BY p.id DESC LIMIT 40").all(String(req.session.user?.id || '')),
+    events: db.prepare("SELECT e.id,e.title,e.description,e.event_date,e.location,e.status,(SELECT COUNT(*) FROM event_rsvps r WHERE r.event_id=e.id) AS attendees,EXISTS(SELECT 1 FROM event_rsvps r WHERE r.event_id=e.id AND r.user_id=?) AS attending FROM events e WHERE e.status!='cancelled' ORDER BY e.event_date ASC LIMIT 24").all(String(req.session.user?.id || '')),
+    gallery: db.prepare("SELECT id,username,title,image_url,description,category,created_at FROM gallery_items WHERE status='approved' ORDER BY id DESC LIMIT 24").all(),
     achievements: db.prepare('SELECT code,title,description,icon FROM achievements ORDER BY id').all()
   });
 });
@@ -352,7 +359,7 @@ async function getDiscordGuildMembership(userId) {
     const [member, serverRoles] = await Promise.all([memberResponse.json(), rolesResponse.json()]);
     const roleNames = new Map(serverRoles.map(role => [role.id, role.name]));
     const roles = (member.roles || []).filter(id => id !== guildId).map(id => ({ id, name: roleNames.get(id) || 'Роль сервера' }));
-    return { status: 'ok', roles };
+    return { status: 'ok', roles, joinedAt: member.joined_at || null };
   } catch {
     return { status: 'error', roles: [] };
   }
@@ -379,16 +386,22 @@ app.put('/api/profile', requireLogin, ensureCsrf, (req,res) => {
 // Find-company board: short-lived, member-authenticated requests with one response per member.
 app.get('/api/company', (req,res) => {
   db.prepare("DELETE FROM company_posts WHERE expires_at < datetime('now') AND status='open'").run();
-  const posts = db.prepare("SELECT p.id,p.username,p.activity,p.details,p.game,p.created_at,p.expires_at,(SELECT COUNT(*) FROM company_responses r WHERE r.post_id=p.id) AS responses, EXISTS(SELECT 1 FROM company_responses r WHERE r.post_id=p.id AND r.user_id=?) AS responded FROM company_posts p WHERE p.status='open' ORDER BY p.id DESC LIMIT 40").all(String(req.session.user?.id || ''));
+  const posts = db.prepare("SELECT p.id,p.username,p.activity,p.details,p.game,p.available_at,p.created_at,p.expires_at,(SELECT COUNT(*) FROM company_responses r WHERE r.post_id=p.id) AS responses, EXISTS(SELECT 1 FROM company_responses r WHERE r.post_id=p.id AND r.user_id=?) AS responded FROM company_posts p WHERE p.status='open' ORDER BY p.id DESC LIMIT 40").all(String(req.session.user?.id || ''));
   res.json({posts});
 });
 app.post('/api/company', requireLogin, ensureCsrf, (req,res) => {
   const b=req.body||{};
   if(!validateRequired(b,['activity']) || String(b.activity).length>60 || String(b.details||'').length>400 || String(b.game||'').length>80) return res.status(400).json({error:'Укажите занятие (до 60 символов), описание (до 400) и игру (до 80).'});
+  let availableAt = null;
+  if (b.available_at) {
+    const date = new Date(b.available_at);
+    if (Number.isNaN(date.getTime()) || date.getTime() < Date.now()) return res.status(400).json({error:'Укажи корректное будущее время.'});
+    availableAt = date.toISOString();
+  }
   const activity=safeText(b.activity,60), details=safeText(b.details||'',400), game=safeText(b.game||'',80), u=req.session.user;
   const recent=db.prepare("SELECT COUNT(*) n FROM company_posts WHERE user_id=? AND created_at > datetime('now','-30 minutes')").get(String(u.id)).n;
   if(recent>=3) return res.status(429).json({error:'Можно создать не больше 3 запросов за 30 минут.'});
-  const r=db.prepare("INSERT INTO company_posts(user_id,username,activity,details,game,expires_at) VALUES(?,?,?,?,?,datetime('now','+12 hours'))").run(String(u.id),safeText(u.username,100),activity,details,game);
+  const r=db.prepare("INSERT INTO company_posts(user_id,username,activity,details,game,available_at,expires_at) VALUES(?,?,?,?,?,?,datetime('now','+12 hours'))").run(String(u.id),safeText(u.username,100),activity,details,game,availableAt);
   logAction(req,'company.create',`post=${r.lastInsertRowid}`); res.status(201).json({ok:true,id:r.lastInsertRowid});
 });
 app.post('/api/company/:id/respond', requireLogin, ensureCsrf, (req,res) => {
@@ -410,18 +423,26 @@ app.post('/api/events/:id/rsvp', requireLogin, ensureCsrf, (req,res) => {
   db.prepare("INSERT OR IGNORE INTO user_achievements(user_id,achievement_id) SELECT ?,id FROM achievements WHERE code='event_guest'").run(String(u.id));
   res.status(201).json({ok:true});
 });
+app.delete('/api/events/:id/rsvp', requireLogin, ensureCsrf, (req,res) => {
+  const eventId = Number(req.params.id);
+  const result = db.prepare('DELETE FROM event_rsvps WHERE event_id=? AND user_id=?').run(eventId,String(req.session.user.id));
+  if (!result.changes) return res.status(404).json({error:'Запись на это событие не найдена.'});
+  res.json({ok:true});
+});
 app.post('/api/gallery', requireLogin, ensureCsrf, (req,res) => {
   const b=req.body||{};
   if(!validateRequired(b,['title','image_url']) || String(b.title).length>100 || String(b.description||'').length>500) return res.status(400).json({error:'Укажите название (до 100 символов) и описание (до 500).'});
+  const category = ['Аниме','Арт','Игры','Скриншоты','Другое'].includes(b.category) ? b.category : 'Другое';
   let url; try { url=new URL(String(b.image_url)); } catch { return res.status(400).json({error:'Укажите корректный URL изображения.'}); }
   if(!['https:'].includes(url.protocol) || !/\.(png|jpe?g|webp|gif)(\?.*)?$/i.test(url.pathname+url.search)) return res.status(400).json({error:'Разрешены только HTTPS-ссылки на изображения PNG, JPG, WEBP или GIF.'});
   const u=req.session.user;
-  const r=db.prepare('INSERT INTO gallery_items(user_id,username,title,image_url,description) VALUES(?,?,?,?,?)').run(String(u.id),safeText(u.username,100),safeText(b.title,100),url.href,safeText(b.description,500));
+  const r=db.prepare('INSERT INTO gallery_items(user_id,username,title,image_url,description,category) VALUES(?,?,?,?,?,?)').run(String(u.id),safeText(u.username,100),safeText(b.title,100),url.href,safeText(b.description,500),category);
   logAction(req,'gallery.submit',`item=${r.lastInsertRowid}`); res.status(201).json({ok:true,message:'Работа отправлена на модерацию.'});
 });
 app.post('/api/gallery/upload', requireLogin, ensureCsrf, express.raw({ type: Object.keys(GALLERY_IMAGE_TYPES), limit: '5mb' }), (req,res) => {
   const title = String(req.query.title || '');
   const description = String(req.query.description || '');
+  const category = ['Аниме','Арт','Игры','Скриншоты','Другое'].includes(req.query.category) ? req.query.category : 'Другое';
   const mime = String(req.get('content-type') || '').split(';')[0].toLowerCase();
   const ext = GALLERY_IMAGE_TYPES[mime];
   const image = req.body;
@@ -439,8 +460,8 @@ app.post('/api/gallery/upload', requireLogin, ensureCsrf, express.raw({ type: Ob
     fs.writeFileSync(filePath, image, { flag: 'wx' });
     const u = req.session.user;
     const imageUrl = `/gallery-files/${filename}`;
-    const result = db.prepare('INSERT INTO gallery_items(user_id,username,title,image_url,description) VALUES(?,?,?,?,?)')
-      .run(String(u.id), safeText(u.username,100), safeText(title,100), imageUrl, safeText(description,500));
+    const result = db.prepare('INSERT INTO gallery_items(user_id,username,title,image_url,description,category) VALUES(?,?,?,?,?,?)')
+      .run(String(u.id), safeText(u.username,100), safeText(title,100), imageUrl, safeText(description,500), category);
     logAction(req, 'gallery.submit', `item=${result.lastInsertRowid}; uploaded image`);
     return res.status(201).json({ ok: true, message: 'Картинка загружена и отправлена на модерацию.' });
   } catch {
