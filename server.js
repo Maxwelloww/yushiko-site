@@ -18,6 +18,10 @@ const SITE_URL = (process.env.SITE_URL || `http://localhost:${PORT}`).replace(/\
 // Railway volume can be mounted at /app/data and selected with DATA_DIR.
 const DB_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(__dirname, 'data');
 fs.mkdirSync(DB_DIR, { recursive: true });
+const GALLERY_DIR = path.join(DB_DIR, 'gallery');
+fs.mkdirSync(GALLERY_DIR, { recursive: true });
+const GALLERY_IMAGE_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
+let discordStatsCache = { expiresAt: 0, value: null };
 
 if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32) {
   console.error('SESSION_SECRET must be set to a random value of at least 32 characters. See .env.example.');
@@ -244,18 +248,37 @@ app.get('/api/me', async (req, res) => {
   if (user && !user.isAdmin) user.isAdmin = await hasAdminRole(user.id);
   res.json({ user, csrfToken: req.session.csrf });
 });
-app.get('/api/public', async (req, res) => {
-  let discord = { members: null, online: null, source: 'unavailable' };
-  if (process.env.DISCORD_WIDGET_ENABLED === 'true' && process.env.DISCORD_GUILD_ID) {
+async function getDiscordServerStats() {
+  if (discordStatsCache.value && discordStatsCache.expiresAt > Date.now()) return discordStatsCache.value;
+  const { DISCORD_BOT_TOKEN: botToken, DISCORD_GUILD_ID: guildId } = process.env;
+  if (botToken && guildId) {
     try {
-      const response = await fetch(`https://discord.com/api/guilds/${encodeURIComponent(process.env.DISCORD_GUILD_ID)}/widget.json`, { signal: AbortSignal.timeout(3500) });
+      const response = await fetch(`https://discord.com/api/v10/guilds/${encodeURIComponent(guildId)}?with_counts=true`, {
+        headers: { Authorization: `Bot ${botToken}` }, signal: AbortSignal.timeout(4000)
+      });
       if (response.ok) {
-        const data = await response.json();
-        discord = { members: Array.isArray(data.members) ? null : (data.presence_count ?? null), online: data.presence_count ?? null, source: 'widget' };
-        // Widget API exposes online presence, not a reliable total member count.
+        const guild = await response.json();
+        const value = { guild: guild.name || null, members: guild.approximate_member_count ?? null, online: guild.approximate_presence_count ?? null, source: 'bot' };
+        discordStatsCache = { expiresAt: Date.now() + 60_000, value };
+        return value;
       }
-    } catch { /* Keep the public page usable if Discord widget is disabled/unavailable. */ }
+    } catch { /* Use the public widget as a fallback below. */ }
   }
+  if (process.env.DISCORD_WIDGET_ENABLED === 'true' && guildId) {
+    try {
+      const response = await fetch(`https://discord.com/api/guilds/${encodeURIComponent(guildId)}/widget.json`, { signal: AbortSignal.timeout(3500) });
+      if (response.ok) {
+        const widget = await response.json();
+        const value = { guild: widget.name || null, members: null, online: widget.presence_count ?? null, source: 'widget' };
+        discordStatsCache = { expiresAt: Date.now() + 60_000, value };
+        return value;
+      }
+    } catch { /* The public page stays available without live Discord stats. */ }
+  }
+  return { guild: null, members: null, online: null, source: 'unavailable' };
+}
+app.get('/api/public', async (req, res) => {
+  const discord = await getDiscordServerStats();
   res.json({
     inviteUrl,
     discord,
@@ -396,6 +419,35 @@ app.post('/api/gallery', requireLogin, ensureCsrf, (req,res) => {
   const r=db.prepare('INSERT INTO gallery_items(user_id,username,title,image_url,description) VALUES(?,?,?,?,?)').run(String(u.id),safeText(u.username,100),safeText(b.title,100),url.href,safeText(b.description,500));
   logAction(req,'gallery.submit',`item=${r.lastInsertRowid}`); res.status(201).json({ok:true,message:'Работа отправлена на модерацию.'});
 });
+app.post('/api/gallery/upload', requireLogin, ensureCsrf, express.raw({ type: Object.keys(GALLERY_IMAGE_TYPES), limit: '5mb' }), (req,res) => {
+  const title = String(req.query.title || '');
+  const description = String(req.query.description || '');
+  const mime = String(req.get('content-type') || '').split(';')[0].toLowerCase();
+  const ext = GALLERY_IMAGE_TYPES[mime];
+  const image = req.body;
+  if (!ext || !Buffer.isBuffer(image) || image.length === 0 || title.trim().length === 0 || title.length > 100 || description.length > 500) {
+    return res.status(400).json({ error: 'Добавь картинку JPG, PNG, WEBP или GIF до 5 МБ и укажи название до 100 символов.' });
+  }
+  const validSignature = mime === 'image/jpeg' ? image[0] === 0xff && image[1] === 0xd8 && image[2] === 0xff
+    : mime === 'image/png' ? image.subarray(0, 8).equals(Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]))
+    : mime === 'image/webp' ? image.toString('ascii', 0, 4) === 'RIFF' && image.toString('ascii', 8, 12) === 'WEBP'
+    : image.toString('ascii', 0, 3) === 'GIF';
+  if (!validSignature) return res.status(400).json({ error: 'Файл не похож на выбранный формат изображения.' });
+  const filename = `${crypto.randomUUID()}.${ext}`;
+  const filePath = path.join(GALLERY_DIR, filename);
+  try {
+    fs.writeFileSync(filePath, image, { flag: 'wx' });
+    const u = req.session.user;
+    const imageUrl = `/gallery-files/${filename}`;
+    const result = db.prepare('INSERT INTO gallery_items(user_id,username,title,image_url,description) VALUES(?,?,?,?,?)')
+      .run(String(u.id), safeText(u.username,100), safeText(title,100), imageUrl, safeText(description,500));
+    logAction(req, 'gallery.submit', `item=${result.lastInsertRowid}; uploaded image`);
+    return res.status(201).json({ ok: true, message: 'Картинка загружена и отправлена на модерацию.' });
+  } catch {
+    try { fs.unlinkSync(filePath); } catch { /* No file to clean up. */ }
+    return res.status(500).json({ error: 'Не удалось сохранить картинку. Попробуй ещё раз.' });
+  }
+});
 app.get('/api/admin/gallery', requireAdmin, (req,res)=>res.json(db.prepare('SELECT * FROM gallery_items ORDER BY CASE status WHEN \'pending\' THEN 0 ELSE 1 END,id DESC LIMIT 300').all()));
 app.patch('/api/admin/gallery/:id', requireAdmin, ensureCsrf, (req,res)=>{
   const status=String(req.body?.status||''); if(!['approved','rejected','pending'].includes(status)) return res.status(400).json({error:'Недопустимый статус.'});
@@ -409,11 +461,10 @@ app.get('/api/admin/analytics', requireAdmin, (req,res)=>{
 });
 app.get('/api/admin/discord-status', requireAdmin, async (req,res)=>{
  const configured=Boolean(process.env.DISCORD_BOT_TOKEN && process.env.DISCORD_GUILD_ID);
- if(!configured) return res.json({configured:false,ok:false,message:'Добавьте DISCORD_BOT_TOKEN и DISCORD_GUILD_ID в .env.'});
- try { const response=await fetch(`https://discord.com/api/v10/guilds/${encodeURIComponent(process.env.DISCORD_GUILD_ID)}?with_counts=true`,{headers:{Authorization:`Bot ${process.env.DISCORD_BOT_TOKEN}`},signal:AbortSignal.timeout(4000)}); const data=await response.json();
- if(!response.ok) return res.json({configured:true,ok:false,message:`Discord API ответил ${response.status}. Проверьте токен и доступ бота.`});
- res.json({configured:true,ok:true,guild:data.name,members:data.approximate_member_count,online:data.approximate_presence_count});
- } catch { res.json({configured:true,ok:false,message:'Не удалось связаться с Discord API.'}); }
+ if(!configured) return res.json({configured:false,ok:false,message:'Добавьте DISCORD_BOT_TOKEN и DISCORD_GUILD_ID в переменные Railway.'});
+ const stats=await getDiscordServerStats();
+ if(stats.source!=='bot') return res.json({configured:true,ok:false,message:'Бот не смог прочитать сервер. Проверь DISCORD_BOT_TOKEN и DISCORD_GUILD_ID.'});
+ res.json({configured:true,ok:true,...stats});
 });
 
 app.get('/auth/discord', (req, res) => {
@@ -557,6 +608,7 @@ app.get('/api/admin/backup', requireAdmin, ensureCsrf, (req, res) => {
   }).catch(() => res.status(500).json({ error: 'Не удалось создать резервную копию.' }));
 });
 
+app.use('/gallery-files', express.static(GALLERY_DIR, { dotfiles: 'deny', index: false, maxAge: isProduction ? '1d' : 0, immutable: isProduction }));
 app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'], maxAge: isProduction ? '1h' : 0 }));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('*', (req, res) => res.status(404).sendFile(path.join(__dirname, 'public', '404.html')));
