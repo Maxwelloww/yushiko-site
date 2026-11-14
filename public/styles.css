@@ -121,6 +121,21 @@ html{scroll-padding-top:76px}body{background:#050505;color:#f4f4f1;font-family:'
 .team-recruitment-image{display:block;width:100%;height:100%;min-height:0;position:absolute;inset:0;object-fit:contain;object-position:center;filter:grayscale(1);transition:filter .4s ease}
 .recruitment-art:hover .team-recruitment-image{transform:scale(1.025);filter:grayscale(.72)}
 @media(max-width:700px){.team-section.recruitment-layout{grid-template-columns:1fr}.recruitment-layout .team-art.recruitment-art{min-height:0;aspect-ratio:2000/671}}
+.recruitment-banner{aspect-ratio:2000/671;max-height:none;object-fit:contain;background:#050505;margin-bottom:16px}
+.recruitment-intro{margin:22px 0 18px}
+.recruitment-intro>p:last-of-type{max-width:780px}
+.recruitment-intro .button{margin-top:12px}
+.recruitment-stats{margin:12px 0 28px}
+.recruitment-roles{margin:0 0 42px}
+.recruitment-roles article{min-height:190px;transition:transform .25s ease,border-color .25s ease,background .25s ease}
+.recruitment-roles article:hover{transform:translateY(-4px);border-color:#888;background:#121313}
+.recruitment-role-number{font-size:.62rem;letter-spacing:.14em;color:#aaa}
+.recruitment-roles h2{margin-top:20px}
+.recruitment-apply{padding:30px 0 20px;border-top:1px solid #ffffff2b}
+.recruitment-apply .section-heading{margin-bottom:22px}
+.recruitment-apply .application-form{padding:22px}
+.recruitment-apply input:focus,.recruitment-apply textarea:focus,.recruitment-apply select:focus{border-color:#aaa;box-shadow:0 0 0 2px #ffffff12}
+@media(max-width:700px){.recruitment-banner{aspect-ratio:2.98/1;margin-bottom:10px}.recruitment-intro{margin:18px 0 12px}.recruitment-stats{gap:14px;margin-bottom:20px}.recruitment-roles{gap:8px;margin-bottom:28px}.recruitment-roles article{min-height:0;padding:18px}.recruitment-roles h2{margin-top:12px}.recruitment-apply{padding-top:24px}.recruitment-apply .application-form{padding:14px}}
 
 /* New community tools */
 .header-actions{display:flex;align-items:center;gap:8px;position:relative}
