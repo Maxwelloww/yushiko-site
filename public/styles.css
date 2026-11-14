@@ -115,12 +115,12 @@ html{scroll-padding-top:76px}body{background:#050505;color:#f4f4f1;font-family:'
 
 /* Signed-in account presentation. */
 [hidden]{display:none!important}
-.team-art.recruitment-art{min-height:260px;background:#050505;border-color:#5a5a5a}
+.team-section.recruitment-layout{grid-template-columns:1fr;gap:22px}
+.recruitment-layout .team-art.recruitment-art{min-height:0;height:auto;aspect-ratio:2000/671;background:#050505;border-color:#5a5a5a}
 .team-art.recruitment-art:before{display:none}
-.team-recruitment-image{display:block;width:100%;height:100%;min-height:260px;position:absolute;inset:0;object-fit:cover;object-position:center;filter:grayscale(1);transition:transform .6s ease,filter .4s ease}
+.team-recruitment-image{display:block;width:100%;height:100%;min-height:0;position:absolute;inset:0;object-fit:contain;object-position:center;filter:grayscale(1);transition:filter .4s ease}
 .recruitment-art:hover .team-recruitment-image{transform:scale(1.025);filter:grayscale(.72)}
-.recruitment-art .vertical-note{z-index:1;text-shadow:0 1px 6px #000}
-@media(max-width:700px){.team-art.recruitment-art,.team-recruitment-image{min-height:190px}}
+@media(max-width:700px){.team-section.recruitment-layout{grid-template-columns:1fr}.recruitment-layout .team-art.recruitment-art{min-height:0;aspect-ratio:2000/671}}
 
 /* New community tools */
 .header-actions{display:flex;align-items:center;gap:8px;position:relative}
