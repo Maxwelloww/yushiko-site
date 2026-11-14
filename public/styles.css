@@ -136,6 +136,38 @@ html{scroll-padding-top:76px}body{background:#050505;color:#f4f4f1;font-family:'
 .recruitment-apply .application-form{padding:22px}
 .recruitment-apply input:focus,.recruitment-apply textarea:focus,.recruitment-apply select:focus{border-color:#aaa;box-shadow:0 0 0 2px #ffffff12}
 @media(max-width:700px){.recruitment-banner{aspect-ratio:2.98/1;margin-bottom:10px}.recruitment-intro{margin:18px 0 12px}.recruitment-stats{gap:14px;margin-bottom:20px}.recruitment-roles{gap:8px;margin-bottom:28px}.recruitment-roles article{min-height:0;padding:18px}.recruitment-roles h2{margin-top:12px}.recruitment-apply{padding-top:24px}.recruitment-apply .application-form{padding:14px}}
+.image-link-card{aspect-ratio:3204/1247;min-height:0;padding:0}
+.image-link-card img{object-fit:cover;object-position:center}
+.page-banner.section-page-banner{aspect-ratio:3204/1247;max-height:clamp(190px,32vw,360px);min-height:150px;object-fit:cover;object-position:center 46%;background:#080808;margin:0 auto 20px}
+@media(max-width:700px){.image-link-card{aspect-ratio:3204/1247;min-height:0}.page-banner.section-page-banner{max-height:220px;min-height:132px;margin-bottom:15px}}
+
+/* Ivory theme: retain the monochrome artwork, lighten the interface surfaces. */
+html[data-theme="light"]{--bg:#f2efe8;--panel:#fffdf8;--panel2:#e9e5dc;--line:#d8d2c7;--white:#282722;--muted:#6d695f;color-scheme:light}
+html[data-theme="light"] body{background:#f2efe8;color:#282722;background-image:radial-gradient(ellipse at 50% 0%,#fff 0,transparent 55%)}
+html[data-theme="light"] .petal-field{opacity:.32}
+html[data-theme="light"] .lily-backdrop{opacity:.09;filter:grayscale(1)}
+html[data-theme="light"] .site-header{background:#f7f4eeeF;border-color:#28272224;box-shadow:0 8px 24px #352f2210}
+html[data-theme="light"] .brand-name,html[data-theme="light"] .main-nav a,html[data-theme="light"] .nav-more summary,html[data-theme="light"] .site-footer,html[data-theme="light"] .site-footer a,html[data-theme="light"] .site-footer>span,html[data-theme="light"] .header-tool{color:#302e29}
+html[data-theme="light"] .main-nav a:hover,html[data-theme="light"] .site-footer a:hover{color:#000}
+html[data-theme="light"] .nav-more-menu{background:#fffdf8;border-color:#d1cabd;box-shadow:0 14px 34px #30281920}
+html[data-theme="light"] .nav-more-menu a{color:#37352f!important}
+html[data-theme="light"] .nav-more-menu a:hover,html[data-theme="light"] .nav-more-menu a[aria-current="page"]{background:#ebe7df;color:#161511!important}
+html[data-theme="light"] .button-outline{color:#302e29;background:#ffffffa8;border-color:#302e2966}
+html[data-theme="light"] .button-outline:hover{background:#fff;border-color:#302e29}
+html[data-theme="light"] .home-server,html[data-theme="light"] .server-about,html[data-theme="light"] .info-stats,html[data-theme="light"] .page-content-grid article,html[data-theme="light"] .page-link-card:not(.image-link-card),html[data-theme="light"] .command-card,html[data-theme="light"] .role-shop-card,html[data-theme="light"] .board-filters,html[data-theme="light"] .leaderboard-row,html[data-theme="light"] .event-calendar,html[data-theme="light"] .chat-panel,html[data-theme="light"] .chat-message,html[data-theme="light"] .raffle-card,html[data-theme="light"] .activity-item,html[data-theme="light"] .rules-list article,html[data-theme="light"] .profile-welcome,html[data-theme="light"] .content-row,html[data-theme="light"] .news-card,html[data-theme="light"] .gallery-card,html[data-theme="light"] .company-card,html[data-theme="light"] .achievement,html[data-theme="light"] .profile-card,html[data-theme="light"] .gallery-submit,html[data-theme="light"] .application-form{background:#fffdf8!important;color:#302e29;border-color:#d9d3c8!important;box-shadow:0 8px 24px #382f1e0a!important}
+html[data-theme="light"] .page-link-card:not(.image-link-card):hover,html[data-theme="light"] .role-shop-card:hover,html[data-theme="light"] .company-card:hover,html[data-theme="light"] .activity-item:hover{background:#f5f1e9!important;border-color:#aaa18f!important}
+html[data-theme="light"] .eyebrow,html[data-theme="light"] .section-note,html[data-theme="light"] .muted,html[data-theme="light"] .page-intro>p:last-child,html[data-theme="light"] .home-server small,html[data-theme="light"] .info-stats small,html[data-theme="light"] .server-about p,html[data-theme="light"] .page-content-grid p,html[data-theme="light"] .content-row p,html[data-theme="light"] .news-card p,html[data-theme="light"] .role-shop-card p,html[data-theme="light"] .leaderboard-row span,html[data-theme="light"] .activity-kind,html[data-theme="light"] .activity-item time,html[data-theme="light"] .rules-list p,html[data-theme="light"] .rules-list li,html[data-theme="light"] .profile-bio,html[data-theme="light"] .profile-games,html[data-theme="light"] .gallery-card-copy p,html[data-theme="light"] .gallery-card-copy small,html[data-theme="light"] .company-card p,html[data-theme="light"] .raffle-card p{color:#69645a}
+html[data-theme="light"] .profile-main h3,html[data-theme="light"] .section-heading h2,html[data-theme="light"] .page-intro h1,html[data-theme="light"] .page-content-grid h2,html[data-theme="light"] .role-shop-card h2,html[data-theme="light"] .news-card h3{color:#282722}
+html[data-theme="light"] .site-search-dialog,html[data-theme="light"] .notification-panel,html[data-theme="light"] .gallery-dialog{background:#fffdf8;color:#302e29;border-color:#d1cabd;box-shadow:0 24px 70px #30281928}
+html[data-theme="light"] .notification-panel .panel-heading,html[data-theme="light"] .notification-item,html[data-theme="light"] .gallery-comment,html[data-theme="light"] .gallery-comments{border-color:#ded8cd}
+html[data-theme="light"] .notification-item span,html[data-theme="light"] .notification-item small,html[data-theme="light"] .site-search-results span,html[data-theme="light"] .gallery-dialog-copy span,html[data-theme="light"] .gallery-dialog-copy p,html[data-theme="light"] .gallery-comment p,html[data-theme="light"] .gallery-comment small{color:#69645a}
+html[data-theme="light"] .site-search-dialog input,html[data-theme="light"] .gallery-comments textarea,html[data-theme="light"] .chat-form textarea,html[data-theme="light"] .application-form input,html[data-theme="light"] .application-form textarea,html[data-theme="light"] .application-form select,html[data-theme="light"] .profile-form input,html[data-theme="light"] .profile-form textarea,html[data-theme="light"] .profile-form select,html[data-theme="light"] .board-filters input,html[data-theme="light"] .board-filters select{background:#fff;color:#302e29;border-color:#d2ccbf}
+html[data-theme="light"] .site-search-dialog input::placeholder,html[data-theme="light"] input::placeholder,html[data-theme="light"] textarea::placeholder{color:#908a7e}
+html[data-theme="light"] .calendar-day{background:#f5f1e9;color:#302e29}
+html[data-theme="light"] .calendar-day:hover,html[data-theme="light"] .calendar-day.selected{background:#e6e0d5;border-color:#9b9385}
+html[data-theme="light"] .calendar-grid>span{color:#777064}
+html[data-theme="light"] .discord-role-chip,html[data-theme="light"] .profile-connected{color:#39372f;border-color:#d2ccbf}
+html[data-theme="light"] .site-footer{background:#f7f4ee;border-color:#d8d2c7}
 
 /* New community tools */
 .header-actions{display:flex;align-items:center;gap:8px;position:relative}
