@@ -404,3 +404,14 @@ body{position:relative;isolation:isolate;background:transparent}
 @media(prefers-reduced-motion:reduce){.hero-lily-mark{animation:none}.raffle-card{animation:none}.chat-messages{scroll-behavior:auto}}
 
 [hidden]{display:none!important}
+
+/* Keep each supplied section banner at its native 3204:1247 proportion. */
+.page-card-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch}
+.page-card-grid>.image-link-card{width:100%;height:auto;min-height:0;padding:0;aspect-ratio:3204/1247}
+.page-card-grid>.image-link-card img{object-fit:contain;object-position:center}
+.page-card-grid>.text-link-card{grid-column:1/-1;min-height:76px;padding:16px 22px;display:grid;grid-template-columns:auto auto 1fr;align-items:center;justify-content:initial;gap:14px}
+.page-card-grid>.text-link-card .card-symbol{margin:0}
+.page-card-grid>.text-link-card small{text-align:right}
+.page-banner.section-page-banner{display:block;width:min(100%,1240px);height:auto;max-height:none;min-height:0;aspect-ratio:auto;object-fit:contain;margin:0 auto 24px}
+@media(max-width:1000px){.page-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.page-card-grid{grid-template-columns:1fr;gap:14px}.page-card-grid>.text-link-card{grid-template-columns:auto 1fr;gap:8px 12px}.page-card-grid>.text-link-card small{grid-column:2;text-align:left}.page-banner.section-page-banner{width:100%;margin-bottom:18px}}
