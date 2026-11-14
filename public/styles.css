@@ -428,3 +428,7 @@ body{position:relative;isolation:isolate;background:transparent}
 .subpage .page-intro.split-heading{flex-direction:row;align-items:center;justify-content:space-between;gap:20px}
 .subpage .page-intro.split-heading>div{flex:1;min-width:0}
 @media(max-width:700px){.subpage .page-intro{margin:22px 0 20px;padding-bottom:14px}.subpage .page-intro.split-heading{align-items:flex-start;flex-direction:column;gap:12px}}
+
+/* Page and section headings always start at the left edge; never center them. */
+.subpage .page-intro{align-items:flex-start!important;text-align:left!important}
+.subpage .page-intro h1,.subpage h1,.home-hero h1,.admin-main h1,.support-intro h1{width:auto;text-align:left!important;justify-self:start;margin-left:0!important;margin-right:0!important}
