@@ -123,11 +123,50 @@ CREATE TABLE IF NOT EXISTS raffle_entries (
   user_id TEXT NOT NULL, username TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY(raffle_id,user_id)
 );
+CREATE TABLE IF NOT EXISTS gallery_likes (
+  item_id INTEGER NOT NULL REFERENCES gallery_items(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY(item_id,user_id)
+);
+CREATE TABLE IF NOT EXISTS gallery_saves (
+  item_id INTEGER NOT NULL REFERENCES gallery_items(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY(item_id,user_id)
+);
+CREATE TABLE IF NOT EXISTS gallery_comments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER NOT NULL REFERENCES gallery_items(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL, username TEXT NOT NULL, body TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS notifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, kind TEXT NOT NULL,
+  title TEXT NOT NULL, body TEXT NOT NULL, href TEXT NOT NULL,
+  unique_key TEXT NOT NULL UNIQUE, read_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS content_reports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, target_id INTEGER NOT NULL,
+  target_user_id TEXT NOT NULL, target_name TEXT NOT NULL, content TEXT NOT NULL,
+  reporter_id TEXT NOT NULL, reporter_name TEXT NOT NULL, reason TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open', created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(kind,target_id,reporter_id)
+);
+CREATE TABLE IF NOT EXISTS chat_mutes (
+  user_id TEXT PRIMARY KEY, username TEXT NOT NULL, reason TEXT NOT NULL,
+  expires_at TEXT NOT NULL, set_by TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE INDEX IF NOT EXISTS idx_chat_messages_created ON chat_messages(id DESC);
+CREATE INDEX IF NOT EXISTS idx_gallery_comments_item ON gallery_comments(item_id,id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id,id DESC);
 `);
 for (const [table, column, definition] of [
   ['gallery_items', 'category', "TEXT NOT NULL DEFAULT 'Другое'"],
-  ['company_posts', 'available_at', 'TEXT']
+  ['company_posts', 'available_at', 'TEXT'],
+  ['profiles', 'avatar_url', "TEXT NOT NULL DEFAULT ''"],
+  ['profiles', 'favorite_games', "TEXT NOT NULL DEFAULT ''"],
+  ['profiles', 'status_text', "TEXT NOT NULL DEFAULT ''"],
+  ['profiles', 'achievements_public', 'INTEGER NOT NULL DEFAULT 1'],
+  ['raffles', 'ended_at', 'TEXT']
 ]) {
   const columns = db.pragma(`table_info(${table})`);
   if (!columns.some(item => item.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
@@ -289,6 +328,21 @@ function logAction(req, action, details = '') {
   db.prepare('INSERT INTO audit_logs (actor_id, actor_name, action, details, ip) VALUES (?, ?, ?, ?, ?)')
     .run(String(u.id || 'system'), safeText(u.username || 'system', 100), action, safeText(details, 1000), safeText(req.ip || '', 100));
 }
+function createNotification(userId, kind, title, body, href, uniqueKey) {
+  if (!userId) return;
+  db.prepare('INSERT OR IGNORE INTO notifications(user_id,kind,title,body,href,unique_key) VALUES(?,?,?,?,?,?)')
+    .run(String(userId), safeText(kind,40), safeText(title,120), safeText(body,300), safeText(href,300), safeText(uniqueKey,180));
+}
+function createEventReminders() {
+  const reminders = db.prepare(`SELECT e.id,e.title,e.event_date,r.user_id FROM events e
+    JOIN event_rsvps r ON r.event_id=e.id
+    WHERE e.status!='cancelled' AND datetime(e.event_date)>=datetime('now')
+      AND datetime(e.event_date)<=datetime('now','+24 hours')`).all();
+  for (const event of reminders) createNotification(event.user_id, 'event', 'Скоро начнётся событие',
+    `${event.title} — ${new Date(event.event_date).toLocaleString('ru-RU')}`, '/events.html', `event:${event.id}:reminder`);
+}
+const eventReminderTimer=setInterval(()=>{try{createEventReminders();}catch(error){console.error('Event reminder job failed:',error.message);}},5*60_000);
+eventReminderTimer.unref();
 function validateRequired(body, fields) {
   return fields.every(f => typeof body[f] === 'string' && body[f].trim().length > 0);
 }
@@ -303,6 +357,42 @@ app.get('/api/me', async (req, res) => {
   const user = userView(req);
   if (user && !user.isAdmin) user.isAdmin = await hasAdminRole(user.id);
   res.json({ user, csrfToken: req.session.csrf });
+});
+app.get('/api/notifications', requireLogin, (req,res) => {
+  createEventReminders();
+  const userId=String(req.session.user.id);
+  const rows=db.prepare('SELECT id,kind,title,body,href,read_at,created_at FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT 30').all(userId);
+  res.json({notifications:rows,unread:rows.filter(row=>!row.read_at).length});
+});
+app.post('/api/notifications/:id/read', requireLogin, ensureCsrf, (req,res) => {
+  const result=db.prepare("UPDATE notifications SET read_at=datetime('now') WHERE id=? AND user_id=? AND read_at IS NULL").run(Number(req.params.id),String(req.session.user.id));
+  res.json({ok:true,changed:Boolean(result.changes)});
+});
+app.post('/api/notifications/read-all', requireLogin, ensureCsrf, (req,res) => {
+  db.prepare("UPDATE notifications SET read_at=datetime('now') WHERE user_id=? AND read_at IS NULL").run(String(req.session.user.id));
+  res.json({ok:true});
+});
+app.get('/api/search', (req,res) => {
+  const query=safeText(req.query.q,80).replace(/[%_]/g,' ').trim();
+  if(query.length<2) return res.json({results:[]});
+  const like=`%${query}%`;
+  const results=[];
+  for(const row of db.prepare("SELECT title AS name,body AS excerpt,'Новость' AS type,'/news.html' AS href,created_at FROM news WHERE title LIKE ? OR body LIKE ? ORDER BY id DESC LIMIT 5").all(like,like)) results.push(row);
+  for(const row of db.prepare("SELECT title AS name,description AS excerpt,'Событие' AS type,'/events.html' AS href,event_date AS created_at FROM events WHERE status!='cancelled' AND (title LIKE ? OR description LIKE ? OR location LIKE ?) ORDER BY event_date LIMIT 5").all(like,like,like)) results.push(row);
+  for(const row of db.prepare("SELECT title AS name,description AS excerpt,'Галерея' AS type,'/gallery.html' AS href,created_at FROM gallery_items WHERE status='approved' AND (title LIKE ? OR description LIKE ? OR username LIKE ? OR category LIKE ?) ORDER BY id DESC LIMIT 5").all(like,like,like,like)) results.push(row);
+  for(const row of db.prepare("SELECT activity AS name,details AS excerpt,'Компания' AS type,'/company.html' AS href,created_at FROM company_posts WHERE status='open' AND expires_at>datetime('now') AND (activity LIKE ? OR details LIKE ? OR game LIKE ? OR username LIKE ?) ORDER BY id DESC LIMIT 5").all(like,like,like,like)) results.push(row);
+  const commands=[['/profile','Профиль участника'],['/balance','Баланс и монеты'],['/marry','Брак с участником'],['/duel','Дуэль'],['/shop','Магазин ролей'],['/timely','Награда каждые 12 часов'],['/inventory','Инвентарь'],['/transfer','Передача валюты'],['/create_role','Создание личной роли'],['/role_manager','Управление личной ролью']];
+  for(const [name,excerpt] of commands) if(`${name} ${excerpt}`.toLocaleLowerCase('ru-RU').includes(query.toLocaleLowerCase('ru-RU'))) results.push({name,excerpt,type:'Команда',href:'/commands.html',created_at:null});
+  res.json({results:results.slice(0,20)});
+});
+app.get('/api/activity', (req,res) => {
+  const rows=db.prepare(`SELECT * FROM (
+    SELECT 'news' AS kind,title AS title,body AS detail,created_at AS happened_at,'/news.html' AS href FROM news
+    UNION ALL SELECT 'event',title,description,created_at,'/events.html' FROM events WHERE status!='cancelled'
+    UNION ALL SELECT 'gallery',title,description,created_at,'/gallery.html' FROM gallery_items WHERE status='approved'
+    UNION ALL SELECT 'raffle',title,COALESCE('Победитель: '||winner_name,'Розыгрыш завершён без участников'),COALESCE(ended_at,created_at),'/raffles.html' FROM raffles WHERE status='ended'
+  ) ORDER BY datetime(happened_at) DESC LIMIT 10`).all();
+  res.json({items:rows});
 });
 async function getDiscordServerStats() {
   if (discordStatsCache.value && discordStatsCache.expiresAt > Date.now()) return discordStatsCache.value;
@@ -335,28 +425,39 @@ async function getDiscordServerStats() {
 }
 app.get('/api/public', async (req, res) => {
   const discord = await getDiscordServerStats();
+  const userId=String(req.session.user?.id||'');
   res.json({
     inviteUrl,
     discord,
     news: db.prepare('SELECT id, title, body, created_at FROM news ORDER BY id DESC LIMIT 6').all(),
     company: db.prepare("SELECT p.id,p.username,p.activity,p.details,p.game,p.available_at,p.created_at,p.expires_at,(SELECT COUNT(*) FROM company_responses r WHERE r.post_id=p.id) AS responses,EXISTS(SELECT 1 FROM company_responses r WHERE r.post_id=p.id AND r.user_id=?) AS responded FROM company_posts p WHERE p.status='open' AND p.expires_at>datetime('now') ORDER BY p.id DESC LIMIT 40").all(String(req.session.user?.id || '')),
     events: db.prepare("SELECT e.id,e.title,e.description,e.event_date,e.location,e.status,(SELECT COUNT(*) FROM event_rsvps r WHERE r.event_id=e.id) AS attendees,EXISTS(SELECT 1 FROM event_rsvps r WHERE r.event_id=e.id AND r.user_id=?) AS attending FROM events e WHERE e.status!='cancelled' ORDER BY e.event_date ASC LIMIT 24").all(String(req.session.user?.id || '')),
-    gallery: db.prepare("SELECT id,username,title,image_url,description,category,created_at FROM gallery_items WHERE status='approved' ORDER BY id DESC LIMIT 24").all(),
+    gallery: db.prepare(`SELECT g.id,g.username,g.title,g.image_url,g.description,g.category,g.created_at,
+      (SELECT COUNT(*) FROM gallery_likes l WHERE l.item_id=g.id) AS likes,
+      EXISTS(SELECT 1 FROM gallery_likes l WHERE l.item_id=g.id AND l.user_id=?) AS liked,
+      EXISTS(SELECT 1 FROM gallery_saves s WHERE s.item_id=g.id AND s.user_id=?) AS saved,
+      (SELECT COUNT(*) FROM gallery_comments c WHERE c.item_id=g.id) AS comments
+      FROM gallery_items g WHERE g.status='approved' ORDER BY g.id DESC LIMIT 48`).all(userId,userId),
     achievements: db.prepare('SELECT code,title,description,icon FROM achievements ORDER BY id').all()
   });
 });
 app.get('/api/chat/messages', async (req,res) => {
-  const messages=db.prepare('SELECT id,username,body,created_at FROM chat_messages ORDER BY id DESC LIMIT 100').all().reverse();
+  const userId=String(req.session.user?.id||'');
+  const messages=db.prepare('SELECT id,user_id,username,body,created_at FROM chat_messages ORDER BY id DESC LIMIT 100').all().reverse().map(({user_id,...message})=>({...message,own:Boolean(userId&&user_id===userId)}));
   const isAdmin=req.session.user?await isAdminUser(req.session.user.id):false;
   res.json({messages,isAdmin});
 });
 app.post('/api/chat/messages', requireLogin, ensureCsrf, (req,res) => {
   const body=safeText(req.body?.body,500), user=req.session.user;
   if(!body) return res.status(400).json({error:'Напиши сообщение до 500 символов.'});
+  const mute=db.prepare("SELECT reason,expires_at FROM chat_mutes WHERE user_id=? AND datetime(expires_at)>datetime('now')").get(String(user.id));
+  if(mute) return res.status(403).json({error:`Отправка сообщений ограничена до ${new Date(mute.expires_at).toLocaleString('ru-RU')}. ${mute.reason}`});
   const recent=db.prepare("SELECT COUNT(*) AS count FROM chat_messages WHERE user_id=? AND created_at>datetime('now','-1 minute')").get(String(user.id)).count;
   if(recent>=6) return res.status(429).json({error:'Подожди минуту перед новыми сообщениями.'});
   const result=db.prepare('INSERT INTO chat_messages(user_id,username,body) VALUES(?,?,?)').run(String(user.id),safeText(user.username,100),body);
   syncUserAchievements(String(user.id), user.username);
+  const mentionedNames=[...body.matchAll(/@([\p{L}\p{N}_.-]{2,32})/gu)].map(match=>match[1].toLocaleLowerCase('ru-RU'));
+  if(mentionedNames.length){for(const profile of db.prepare('SELECT user_id,username FROM profiles').all()){if(String(profile.user_id)!==String(user.id)&&mentionedNames.includes(profile.username.toLocaleLowerCase('ru-RU')))createNotification(profile.user_id,'chat','Тебя упомянули в чате',`${safeText(user.username,100)}: ${body}`,'/chat.html',`chat:${result.lastInsertRowid}:mention:${profile.user_id}`);}}
   res.status(201).json({ok:true,id:result.lastInsertRowid});
 });
 app.delete('/api/chat/messages/:id', requireAdmin, ensureCsrf, (req,res) => {
@@ -367,7 +468,7 @@ app.delete('/api/chat/messages/:id', requireAdmin, ensureCsrf, (req,res) => {
 });
 app.get('/api/leaderboard', (req,res) => {
   const leaders=db.prepare(`SELECT p.username,COUNT(ua.achievement_id) AS achievements
-    FROM profiles p JOIN user_achievements ua ON ua.user_id=p.user_id
+    FROM profiles p JOIN user_achievements ua ON ua.user_id=p.user_id WHERE p.achievements_public=1
     GROUP BY p.user_id,p.username ORDER BY achievements DESC,MAX(ua.earned_at) ASC,p.username COLLATE NOCASE ASC LIMIT 50`).all();
   res.json({leaders});
 });
@@ -400,13 +501,14 @@ app.delete('/api/raffles/:id/enter', requireLogin, ensureCsrf, (req,res) => {
   res.json({ok:true,entered:false});
 });
 app.post('/api/admin/raffles/:id/draw', requireAdmin, ensureCsrf, (req,res) => {
-  const raffle=db.prepare("SELECT id,status,end_at FROM raffles WHERE id=?").get(Number(req.params.id));
+  const raffle=db.prepare("SELECT id,status,end_at,title FROM raffles WHERE id=?").get(Number(req.params.id));
   if(!raffle) return res.status(404).json({error:'Розыгрыш не найден.'});
   if(raffle.status!=='open') return res.status(400).json({error:'Для этого розыгрыша победитель уже выбран.'});
   if(new Date(raffle.end_at).getTime()>Date.now()) return res.status(400).json({error:'Розыгрыш ещё не завершился.'});
   const entries=db.prepare('SELECT user_id,username FROM raffle_entries WHERE raffle_id=?').all(raffle.id);
   const winner=entries.length?entries[crypto.randomInt(entries.length)]:null;
-  db.transaction(()=>db.prepare("UPDATE raffles SET status='ended',winner_user_id=?,winner_name=? WHERE id=? AND status='open'").run(winner?.user_id||null,winner?.username||null,raffle.id))();
+  db.transaction(()=>db.prepare("UPDATE raffles SET status='ended',winner_user_id=?,winner_name=?,ended_at=datetime('now') WHERE id=? AND status='open'").run(winner?.user_id||null,winner?.username||null,raffle.id))();
+  if(winner) createNotification(winner.user_id,'raffle','Ты выиграл розыгрыш',`${raffle.title}: ${winner.username} получил приз.`,'/raffles.html',`raffle:${raffle.id}:winner`);
   logAction(req,'raffle.draw',`raffle=${raffle.id}; entries=${entries.length}`);
   res.json({ok:true,winner:winner?.username||null,entries:entries.length});
 });
@@ -495,9 +597,16 @@ app.get('/api/profile', requireLogin, async (req, res) => {
 });
 app.put('/api/profile', requireLogin, ensureCsrf, (req,res) => {
   const b=req.body||{};
-  if (typeof b.bio!=='string' || b.bio.length>240) return res.status(400).json({error:'Описание должно быть текстом не длиннее 240 символов.'});
+  if (typeof b.bio!=='string' || b.bio.length>240 || typeof b.favorite_games!=='string' || b.favorite_games.length>180 || typeof b.status_text!=='string' || b.status_text.length>80 || typeof b.avatar_url!=='string' || b.avatar_url.length>500) return res.status(400).json({error:'Проверь описание, игры, статус и ссылку на аватар.'});
+  let avatarUrl='';
+  if(b.avatar_url.trim()) { try { const parsed=new URL(b.avatar_url); if(parsed.protocol!=='https:') throw new Error(); avatarUrl=parsed.href; } catch { return res.status(400).json({error:'Аватар должен быть доступен по HTTPS-ссылке.'}); } }
   const u=req.session.user;
-  db.prepare("INSERT INTO profiles(user_id,username,bio,title,updated_at) VALUES(?,?,?,'Участник Miteria',datetime('now')) ON CONFLICT(user_id) DO UPDATE SET username=excluded.username,bio=excluded.bio,updated_at=datetime('now')").run(String(u.id),safeText(u.username,100),safeText(b.bio,240));
+  const publicAchievements=b.achievements_public==='0'||b.achievements_public===false?0:1;
+  db.prepare(`INSERT INTO profiles(user_id,username,bio,title,avatar_url,favorite_games,status_text,achievements_public,updated_at)
+    VALUES(?,?,?,'Участник Miteria',?,?,?,?,datetime('now'))
+    ON CONFLICT(user_id) DO UPDATE SET username=excluded.username,bio=excluded.bio,avatar_url=excluded.avatar_url,
+    favorite_games=excluded.favorite_games,status_text=excluded.status_text,achievements_public=excluded.achievements_public,updated_at=datetime('now')`)
+    .run(String(u.id),safeText(u.username,100),safeText(b.bio,240),avatarUrl,safeText(b.favorite_games,180),safeText(b.status_text,80),publicAchievements);
   db.prepare("INSERT OR IGNORE INTO user_achievements(user_id,achievement_id) SELECT ?,id FROM achievements WHERE code='community_voice'").run(String(u.id));
   logAction(req,'profile.update','profile updated'); res.json({ok:true});
 });
@@ -525,11 +634,13 @@ app.post('/api/company', requireLogin, ensureCsrf, (req,res) => {
 });
 app.post('/api/company/:id/respond', requireLogin, ensureCsrf, (req,res) => {
   const id=Number(req.params.id), u=req.session.user;
-  const post=db.prepare("SELECT id,user_id FROM company_posts WHERE id=? AND status='open' AND expires_at>datetime('now')").get(id);
+  const post=db.prepare("SELECT id,user_id,username,activity FROM company_posts WHERE id=? AND status='open' AND expires_at>datetime('now')").get(id);
   if(!post) return res.status(404).json({error:'Запрос уже закрыт или истёк.'});
   if(post.user_id===String(u.id)) return res.status(400).json({error:'На собственный запрос откликнуться нельзя.'});
   const message=safeText(req.body?.message||'',160);
-  db.prepare('INSERT OR IGNORE INTO company_responses(post_id,user_id,username,message) VALUES(?,?,?,?)').run(id,String(u.id),safeText(u.username,100),message);
+  const response=db.prepare('INSERT OR IGNORE INTO company_responses(post_id,user_id,username,message) VALUES(?,?,?,?)').run(id,String(u.id),safeText(u.username,100),message);
+  if(!response.changes) return res.status(409).json({error:'Ты уже откликался на этот запрос.'});
+  createNotification(post.user_id,'company','Новый отклик на поиск компании',`${safeText(u.username,100)} откликнулся: ${post.activity}.`,'/company.html',`company:${id}:response:${u.id}`);
   res.status(201).json({ok:true,message:'Отклик сохранён. Напиши участнику в Discord, чтобы договориться.'});
 });
 
@@ -588,6 +699,69 @@ app.post('/api/gallery/upload', requireLogin, ensureCsrf, express.raw({ type: Ob
     try { fs.unlinkSync(filePath); } catch { /* No file to clean up. */ }
     return res.status(500).json({ error: 'Не удалось сохранить картинку. Попробуй ещё раз.' });
   }
+});
+app.get('/api/gallery/:id/comments', (req,res) => {
+  const id=Number(req.params.id);
+  if(!db.prepare("SELECT 1 FROM gallery_items WHERE id=? AND status='approved'").get(id)) return res.status(404).json({error:'Работа не найдена.'});
+  const userId=String(req.session.user?.id||'');
+  res.json({comments:db.prepare('SELECT id,user_id,username,body,created_at FROM gallery_comments WHERE item_id=? ORDER BY id DESC LIMIT 100').all(id).reverse().map(({user_id,...comment})=>({...comment,own:Boolean(userId&&user_id===userId)}))});
+});
+app.post('/api/gallery/:id/comments', requireLogin, ensureCsrf, (req,res) => {
+  const id=Number(req.params.id), body=safeText(req.body?.body,500), user=req.session.user;
+  if(!body) return res.status(400).json({error:'Комментарий не может быть пустым.'});
+  const item=db.prepare("SELECT user_id,title FROM gallery_items WHERE id=? AND status='approved'").get(id);
+  if(!item) return res.status(404).json({error:'Работа не найдена.'});
+  const result=db.prepare('INSERT INTO gallery_comments(item_id,user_id,username,body) VALUES(?,?,?,?)').run(id,String(user.id),safeText(user.username,100),body);
+  createNotification(item.user_id,'gallery','Новый комментарий',`${safeText(user.username,100)} прокомментировал работу «${item.title}».`,'/gallery.html',`gallery-comment:${result.lastInsertRowid}`);
+  res.status(201).json({ok:true,id:result.lastInsertRowid});
+});
+for(const [action,table] of [['like','gallery_likes'],['save','gallery_saves']]) app.post(`/api/gallery/:id/${action}`, requireLogin, ensureCsrf, (req,res) => {
+  const id=Number(req.params.id), userId=String(req.session.user.id);
+  if(!db.prepare("SELECT 1 FROM gallery_items WHERE id=? AND status='approved'").get(id)) return res.status(404).json({error:'Работа не найдена.'});
+  const exists=db.prepare(`SELECT 1 FROM ${table} WHERE item_id=? AND user_id=?`).get(id,userId);
+  if(exists) db.prepare(`DELETE FROM ${table} WHERE item_id=? AND user_id=?`).run(id,userId);
+  else db.prepare(`INSERT OR IGNORE INTO ${table}(item_id,user_id) VALUES(?,?)`).run(id,userId);
+  const count=db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE item_id=?`).get(id).count;
+  res.json({active:!exists,count});
+});
+app.post('/api/reports', requireLogin, ensureCsrf, (req,res) => {
+  const {kind,target_id}=req.body||{}, id=Number(target_id), reason=safeText(req.body?.reason,300), user=req.session.user;
+  if(!['chat','gallery','comment'].includes(kind)||!Number.isInteger(id)||id<1||reason.length<5) return res.status(400).json({error:'Выбери причину и укажи подробности (не меньше 5 символов).'});
+  let target;
+  if(kind==='chat') target=db.prepare('SELECT user_id,username,body FROM chat_messages WHERE id=?').get(id);
+  if(kind==='gallery') target=db.prepare("SELECT user_id,username,title||' — '||description AS body FROM gallery_items WHERE id=? AND status='approved'").get(id);
+  if(kind==='comment') target=db.prepare('SELECT user_id,username,body FROM gallery_comments WHERE id=?').get(id);
+  if(!target) return res.status(404).json({error:'Материал не найден.'});
+  if(String(target.user_id)===String(user.id)) return res.status(400).json({error:'Нельзя пожаловаться на свой материал.'});
+  try {
+    db.prepare('INSERT INTO content_reports(kind,target_id,target_user_id,target_name,content,reporter_id,reporter_name,reason) VALUES(?,?,?,?,?,?,?,?)')
+      .run(kind,id,String(target.user_id),safeText(target.username,100),safeText(target.body,500),String(user.id),safeText(user.username,100),reason);
+  } catch(error) { if(String(error.code).startsWith('SQLITE_CONSTRAINT')) return res.status(409).json({error:'Жалоба на этот материал уже отправлена.'}); throw error; }
+  logAction(req,'content.report',`kind=${kind}; target=${id}`);
+  res.status(201).json({ok:true});
+});
+app.get('/api/admin/reports', requireAdmin, (req,res) => res.json(db.prepare("SELECT * FROM content_reports WHERE status='open' ORDER BY id DESC LIMIT 200").all()));
+app.patch('/api/admin/reports/:id', requireAdmin, ensureCsrf, (req,res) => {
+  const status=String(req.body?.status||''); if(!['resolved','dismissed'].includes(status)) return res.status(400).json({error:'Недопустимый статус.'});
+  const result=db.prepare('UPDATE content_reports SET status=? WHERE id=?').run(status,Number(req.params.id));
+  if(!result.changes) return res.status(404).json({error:'Жалоба не найдена.'});
+  logAction(req,'report.resolve',`report=${req.params.id}; status=${status}`);res.json({ok:true});
+});
+app.get('/api/admin/chat-mutes', requireAdmin, (req,res) => res.json(db.prepare("SELECT * FROM chat_mutes WHERE datetime(expires_at)>datetime('now') ORDER BY expires_at").all()));
+app.post('/api/admin/chat-mutes', requireAdmin, ensureCsrf, (req,res) => {
+  const userId=safeText(req.body?.user_id,32), duration=Number(req.body?.duration_minutes), reason=safeText(req.body?.reason,240);
+  if(!/^\d{15,22}$/.test(userId)||!Number.isInteger(duration)||duration<1||duration>10080) return res.status(400).json({error:'Укажи Discord ID и срок от 1 минуты до 7 дней.'});
+  const target=db.prepare('SELECT username FROM chat_messages WHERE user_id=? ORDER BY id DESC LIMIT 1').get(userId);
+  const username=target?.username||userId, expiresAt=new Date(Date.now()+duration*60_000).toISOString();
+  db.prepare(`INSERT INTO chat_mutes(user_id,username,reason,expires_at,set_by) VALUES(?,?,?,?,?)
+    ON CONFLICT(user_id) DO UPDATE SET username=excluded.username,reason=excluded.reason,expires_at=excluded.expires_at,set_by=excluded.set_by,created_at=datetime('now')`)
+    .run(userId,username,reason||'Нарушение правил чата',expiresAt,String(req.session.user.id));
+  logAction(req,'chat.mute',`user=${userId}; minutes=${duration}`);res.status(201).json({ok:true});
+});
+app.delete('/api/admin/chat-mutes/:userId', requireAdmin, ensureCsrf, (req,res) => {
+  const result=db.prepare('DELETE FROM chat_mutes WHERE user_id=?').run(safeText(req.params.userId,32));
+  if(!result.changes) return res.status(404).json({error:'Активное ограничение не найдено.'});
+  logAction(req,'chat.unmute',`user=${req.params.userId}`);res.json({ok:true});
 });
 app.get('/api/admin/gallery', requireAdmin, (req,res)=>res.json(db.prepare('SELECT * FROM gallery_items ORDER BY CASE status WHEN \'pending\' THEN 0 ELSE 1 END,id DESC LIMIT 300').all()));
 app.patch('/api/admin/gallery/:id', requireAdmin, ensureCsrf, (req,res)=>{
@@ -725,6 +899,7 @@ app.post('/api/admin/tickets/:id/messages', requireAdmin, ensureCsrf, (req, res)
   const u=req.session.user;
   db.prepare('INSERT INTO ticket_messages (ticket_id,sender_id,sender_name,sender_role,body) VALUES (?,?,?,?,?)').run(id,String(u.id),safeText(u.username,100),'staff',safeText(body.body,3000));
   db.prepare("UPDATE support_tickets SET updated_at=datetime('now'), status=CASE WHEN status='closed' THEN 'closed' ELSE 'answered' END WHERE id=?").run(id);
+  createNotification(ticket.user_id,'support','Ответ поддержки',`Новое сообщение в обращении «${ticket.subject}».`,'/support.html',`ticket:${id}:reply:${Date.now()}`);
   logAction(req, 'ticket.reply', `ticket=${id}`);
   res.status(201).json({ ok: true });
 });

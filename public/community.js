@@ -7,7 +7,7 @@ async function refreshChat(){
   try{
     const response=await fetch('/api/chat/messages');if(!response.ok)throw new Error();
     const data=await response.json();chatIsAdmin=Boolean(data.isAdmin);
-    chatBox.innerHTML=data.messages.length?data.messages.map(message=>`<article class="chat-message" data-chat-id="${message.id}"><div class="chat-message-head"><strong>${esc(message.username)}</strong><time>${esc(new Date(message.created_at.replace(' ','T')+'Z').toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))}</time></div><p>${esc(message.body)}</p>${chatIsAdmin?`<button class="chat-message-delete" type="button" data-chat-delete="${message.id}">Удалить</button>`:''}</article>`).join(''):'<p class="muted">Пока сообщений нет. Начни разговор.</p>';
+    chatBox.innerHTML=data.messages.length?data.messages.map(message=>`<article class="chat-message" data-chat-id="${message.id}"><div class="chat-message-head"><strong>${esc(message.username)}</strong><time>${esc(new Date(message.created_at.replace(' ','T')+'Z').toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))}</time></div><p>${esc(message.body)}</p><div class="chat-message-actions">${!message.own?`<button class="text-button" type="button" data-report-kind="chat" data-report-id="${message.id}">Пожаловаться</button>`:''}${chatIsAdmin?`<button class="chat-message-delete" type="button" data-chat-delete="${message.id}">Удалить</button>`:''}</div></article>`).join(''):'<p class="muted">Пока сообщений нет. Начни разговор.</p>';
     if(nearBottom)chatBox.scrollTop=chatBox.scrollHeight;
     chatLoaded=true;
   }catch{if(!chatLoaded)chatBox.innerHTML='<p class="muted">Не удалось загрузить чат.</p>';}

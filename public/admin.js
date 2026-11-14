@@ -18,11 +18,11 @@ function table(rows, columns) {
 function showTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.side-link').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-  ['overview','news','events','applications','tickets','logs','serverlogs','analytics','discord','gallery','security'].forEach(t => {
+  ['overview','news','events','applications','tickets','logs','serverlogs','analytics','discord','gallery','security','moderation'].forEach(t => {
     const el = $(`#${t}Panel`);
     if (el) el.hidden = t !== tab;
   });
-  const titles = {overview:'Обзор',news:'Новости',events:'События',applications:'Заявки',tickets:'Жалобы и тикеты',logs:'Журнал действий',serverlogs:'Логи сервера',security:'Безопасность',analytics:'Аналитика',discord:'Discord-бот',gallery:'Галерея сообщества'};
+  const titles = {overview:'Обзор',news:'Новости',events:'События',applications:'Заявки',tickets:'Жалобы и тикеты',logs:'Журнал действий',serverlogs:'Логи сервера',security:'Безопасность',analytics:'Аналитика',discord:'Discord-бот',gallery:'Галерея сообщества',moderation:'Модерация сайта'};
   $('#pageTitle').textContent = titles[tab] || 'Админ-панель';
   loadTab(tab).catch(e => say(e.message, 'error'));
 }
@@ -44,6 +44,13 @@ async function loadTab(tab) {
   if(tab==='analytics') return loadAnalytics();
   if(tab==='discord') return loadDiscordStatus();
   if(tab==='gallery') return loadGallery();
+  if(tab==='moderation') return loadModeration();
+}
+async function loadModeration(){
+  const [reports,mutes]=await Promise.all([api('/api/admin/reports'),api('/api/admin/chat-mutes')]);
+  const labels={chat:'Сообщение чата',gallery:'Работа галереи',comment:'Комментарий'};
+  $('#reportsAdminList').innerHTML=reports.length?reports.map(r=>`<article class="admin-item"><div><h3>#${r.id} · ${esc(labels[r.kind]||r.kind)} от ${esc(r.target_name)}</h3><p>${esc(r.content)}</p><small>Жалоба от ${esc(r.reporter_name)} · ${esc(r.reason)} · ${esc(r.created_at)} · ID участника ${esc(r.target_user_id)}</small></div><div class="item-actions"><button class="small-button" data-report-status="resolved" data-report-id="${r.id}">Рассмотрено</button><button class="small-button" data-report-status="dismissed" data-report-id="${r.id}">Отклонить</button><button class="small-button" data-prefill-mute="${esc(r.target_user_id)}">Ограничить чат</button></div></article>`).join(''):'<div class="empty-admin">Открытых жалоб нет.</div>';
+  $('#chatMutesAdminList').innerHTML=mutes.length?mutes.map(m=>`<article class="admin-item"><div><h3>${esc(m.username)} <span class="status-pill">до ${esc(new Date(m.expires_at).toLocaleString('ru-RU'))}</span></h3><p>${esc(m.reason)}</p><small>Discord ID: ${esc(m.user_id)}</small></div><div class="item-actions"><button class="small-button" data-unmute="${esc(m.user_id)}">Снять ограничение</button></div></article>`).join(''):'<div class="empty-admin">Активных ограничений нет.</div>';
 }
 async function loadNews() {
   const rows=await api('/api/admin/news');
@@ -91,13 +98,18 @@ $('#newsForm').addEventListener('submit',async e=>{e.preventDefault();const f=e.
 $('#eventForm').addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;const b=Object.fromEntries(new FormData(f));b.event_date=new Date(b.event_date).toISOString();try{await api('/api/admin/events',{method:'POST',body:JSON.stringify(b)});f.reset();f.elements.location.value='Discord';say('Событие создано.');await loadEvents();await loadSummary()}catch(err){say(err.message,'error')}});
 document.addEventListener('click',async e=>{
  const del=e.target.closest('[data-delete-news]'); const cancel=e.target.closest('[data-cancel-event]'); const save=e.target.closest('[data-save-app]'); const gallery=e.target.closest('[data-gallery-status]');
+ const report=e.target.closest('[data-report-status]'),unmute=e.target.closest('[data-unmute]'),prefill=e.target.closest('[data-prefill-mute]');
  try {
+  if(report){await api(`/api/admin/reports/${report.dataset.reportId}`,{method:'PATCH',body:JSON.stringify({status:report.dataset.reportStatus})});say('Жалоба обновлена.');await loadModeration()}
+  if(unmute){await api(`/api/admin/chat-mutes/${unmute.dataset.unmute}`,{method:'DELETE'});say('Ограничение снято.');await loadModeration()}
+  if(prefill){showTab('moderation');$('#chatMuteForm').elements.user_id.value=prefill.dataset.prefillMute;}
   if(del){await api(`/api/admin/news/${del.dataset.deleteNews}`,{method:'DELETE'});say('Новость удалена.');await loadNews();await loadSummary()}
   if(cancel){await api(`/api/admin/events/${cancel.dataset.cancelEvent}`,{method:'DELETE'});say('Событие отменено.');await loadEvents();await loadSummary()}
   if(save){const id=save.dataset.saveApp;const status=$(`[data-app-status="${id}"]`).value;await api(`/api/admin/applications/${id}`,{method:'PATCH',body:JSON.stringify({status})});say('Статус заявки обновлён.');await loadApplications();await loadSummary()}
   if(gallery){await api(`/api/admin/gallery/${gallery.dataset.galleryId}`,{method:'PATCH',body:JSON.stringify({status:gallery.dataset.galleryStatus})});say('Статус работы обновлён.');await loadGallery();}
  } catch(err){say(err.message,'error')}
 });
+$('#chatMuteForm')?.addEventListener('submit',async e=>{e.preventDefault();const form=e.currentTarget,message=$('#moderationMessage');try{await api('/api/admin/chat-mutes',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(form)))});say('Ограничение чата установлено.');message.textContent='';await loadModeration();}catch(error){message.textContent=error.message;}});
 $('#backupButton').addEventListener('click',async()=>{
  try { const res=await fetch('/api/admin/backup',{method:'GET',headers:{'X-CSRF-Token':csrfToken}}); if(!res.ok){const d=await res.json().catch(()=>({}));throw new Error(d.error||'Не удалось создать копию')} const blob=await res.blob();const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`yushiko-backup-${new Date().toISOString().slice(0,10)}.sqlite`;a.click();URL.revokeObjectURL(a.href);say('Резервная копия скачана.'); }catch(err){say(err.message,'error')}
 });
