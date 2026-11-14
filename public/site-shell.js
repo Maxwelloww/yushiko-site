@@ -4,7 +4,7 @@ const pageLinks = [
   ['company','Компания','/company.html'], ['gallery','Галерея','/gallery.html'],
   ['news','Новости','/news.html'], ['profile','Профиль','/profile.html'], ['team','Команда','/team.html'],
   ['raffles','Розыгрыши','/raffles.html'], ['chat','Чат','/chat.html'], ['leaderboard','Лидеры','/leaderboard.html'],
-  ['activity','Лента','/activity.html'], ['rules','Правила','/rules.html']
+  ['activity','Лента','/activity.html']
 ];
 const currentPage = document.body.dataset.page || 'home';
 const linksMarkup = pageLinks.map(([key,label,url]) => `<a href="${url}"${key===currentPage?' aria-current="page"':''}>${label}</a>`).join('');
